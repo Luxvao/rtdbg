@@ -13,20 +13,20 @@ pub struct Packet {
 }
 
 // Trait implementations
-impl Into<Vec<u8>> for Packet {
-    fn into(mut self) -> Vec<u8> {
+impl From<Packet> for Vec<u8> {
+    fn from(mut val: Packet) -> Self {
         let mut packet_vec: Vec<u8> = Vec::new();
 
         // Push the action
-        packet_vec.push(self.action);
+        packet_vec.push(val.action);
 
         // Push the payload size
-        let mut payload_size = self.payload.len().to_le_bytes().to_vec();
+        let mut payload_size = val.payload.len().to_le_bytes().to_vec();
 
         packet_vec.append(&mut payload_size);
 
         // Push the actual payload
-        packet_vec.append(&mut self.payload);
+        packet_vec.append(&mut val.payload);
 
         packet_vec
     }

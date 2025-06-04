@@ -1,1 +1,5 @@
-write_mem_string(0x559883bc0000, "Hacked!");
+let res = read_mem(0x561e36f5d000, 5);
+
+for byte in res {
+	print(byte);
+}

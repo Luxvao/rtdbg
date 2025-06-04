@@ -38,7 +38,6 @@ fn write_mem_arr(addy: i64, new: Vec<u8>) {
 
 // Writing a string to a specific address
 fn write_mem_string(addy: i64, new: String) {
-    let addy = addy;
     let new = new.as_bytes();
 
     write_mem_arr(addy, new.into());

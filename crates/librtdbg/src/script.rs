@@ -16,6 +16,12 @@ impl TryFrom<Vec<u8>> for Script {
     }
 }
 
+impl Default for Script {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Script {
     // Create an empty script
     pub fn new() -> Script {

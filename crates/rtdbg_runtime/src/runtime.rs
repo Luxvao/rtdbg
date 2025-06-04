@@ -31,7 +31,7 @@ pub fn runtime() {
         let script = queue.pop_front();
 
         if let Some(script) = script {
-            let engine_result = engine.run(&script.get_contents());
+            let engine_result = engine.run(script.get_contents());
 
             if let Err(e) = engine_result {
                 error!("Unable to execute script! Error: {:?}", e);
