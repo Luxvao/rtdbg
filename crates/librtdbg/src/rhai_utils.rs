@@ -1,4 +1,11 @@
-// Usage: register_fn!(engine, name, handler, [GENERICS])
+/*
+    Usage:
+    register_fns!(engine {
+        "name" => handler,
+        ...
+    })
+*/
+
 #[macro_export]
 macro_rules! register_fns {
     ($engine:expr, {$($name:expr => $handler:ident),+}) => {
