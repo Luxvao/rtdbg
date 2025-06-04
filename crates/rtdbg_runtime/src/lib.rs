@@ -8,8 +8,9 @@ use std::{
 };
 
 use ctor::ctor;
+use librtdbg::script::Script;
 
-pub static SCRIPT_QUEUE: (Mutex<VecDeque<String>>, Condvar) =
+pub static SCRIPT_QUEUE: (Mutex<VecDeque<Script>>, Condvar) =
     (Mutex::new(VecDeque::new()), Condvar::new());
 
 #[ctor]

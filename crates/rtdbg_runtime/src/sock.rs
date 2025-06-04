@@ -1,16 +1,15 @@
 use std::{
-    io::{Error, Read, Write},
     os::unix::net::{UnixListener, UnixStream},
     process::exit,
     sync::LazyLock,
 };
 
-use librtdbg::sock::{
-    Api, FAILED_TO_READ_SOCKET, MALFORMED_PACKET, SCRIPT_NOT_UTF8, SUCCESS, UNABLE_TO_ADD_TO_QUEUE,
-    UNABLE_TO_REMOVE_FROM_QUEUE, UNABLE_TO_REMOVE_FROM_QUEUE_NO_SUCH_SCRIPT, notify_error,
-    notify_warning,
+use librtdbg::{
+    api::{ReqApi, RespApi},
+    comms::{report_error, report_write_error, send_packet},
+    packet::Packet,
 };
-use log::error;
+use log::{error, info};
 
 use crate::SCRIPT_QUEUE;
 
@@ -36,158 +35,88 @@ pub fn io() {
 
 fn handle_client(mut stream: UnixStream) {
     loop {
-        let mut action_buffer: [u8; 1] = [0; 1];
-
-        // Read the requested action from the stream
-        println!("TEST - RAN");
-        let read_result = stream.read_exact(&mut action_buffer);
-
-        if let Err(e) = read_result {
-            notify_error(
-                "A: Failed to read from socket! Error: ",
-                &mut stream,
-                e,
-                FAILED_TO_READ_SOCKET,
-            );
-
-            return;
-        }
-
-        let Ok(action) = Api::try_from(action_buffer[0]) else {
-            notify_error(
-                "Malformed packet!",
-                &mut stream,
-                Error::other(""),
-                MALFORMED_PACKET,
-            );
-
-            return;
+        // Read packet from stream
+        let packet = match Packet::read_from_stream(&mut stream) {
+            Ok(packet) => packet,
+            Err(e) => {
+                report_error(&mut stream, e);
+                return;
+            }
         };
 
-        // Execute the action
-        match action {
-            Api::AddToQueue => {
-                // We'll read the payload size into this buffer
-                let mut payload_size_buffer: [u8; 8] = [0; 8];
-
-                let read_result = stream.read_exact(&mut payload_size_buffer);
-
-                if let Err(e) = read_result {
-                    notify_error(
-                        "B: Failed to read from socket! Error: ",
-                        &mut stream,
-                        e,
-                        FAILED_TO_READ_SOCKET,
-                    );
-
-                    return;
-                }
-
-                // The size of the payload
-                let payload_size = usize::from_le_bytes(payload_size_buffer);
-
-                let mut payload_buffer = vec![0; payload_size];
-
-                let read_result = stream.read_exact(&mut payload_buffer);
-
-                if let Err(e) = read_result {
-                    notify_error(
-                        "C: Failed to read from socket! Error: ",
-                        &mut stream,
-                        e,
-                        FAILED_TO_READ_SOCKET,
-                    );
-
-                    return;
-                }
-
-                let Ok(script) = String::from_utf8(payload_buffer) else {
-                    notify_error(
-                        "Script wasn't UTF8!",
-                        &mut stream,
-                        Error::other(""),
-                        SCRIPT_NOT_UTF8,
-                    );
-
-                    return;
-                };
-
-                {
-                    let (queue, condvar) = &SCRIPT_QUEUE;
-
-                    let Ok(mut queue) = queue.lock() else {
-                        notify_warning(
-                            "Unable to add to queue!",
-                            &mut stream,
-                            UNABLE_TO_ADD_TO_QUEUE,
-                        );
-
-                        return;
-                    };
-
-                    queue.push_back(script);
-
-                    condvar.notify_one();
-                }
+        // Parse it into a request
+        let req = match ReqApi::try_from(packet) {
+            Ok(req) => req,
+            Err(e) => {
+                report_error(&mut stream, e);
+                return;
             }
-            Api::RemoveFromQueue => {
-                // We'll read the index the client wishes to remove
-                let mut index_buffer: [u8; 8] = [0; 8];
+        };
 
-                let read_result = stream.read_exact(&mut index_buffer);
+        match req {
+            ReqApi::Disconnect => {
+                return;
+            }
+            ReqApi::AddToQueue { script } => {
+                let (mut queue_locked, condvar) = extract_queue();
 
-                if let Err(e) = read_result {
-                    notify_error(
-                        "D: Failed to read from socket! Error: ",
-                        &mut stream,
-                        e,
-                        FAILED_TO_READ_SOCKET,
-                    );
+                // Push script onto the queue
+                queue_locked.push_front(script);
 
-                    return;
-                }
+                // Notify runtime
+                condvar.notify_one();
+            }
+            ReqApi::RemoveFromQueue { index } => {
+                let (mut queue_locked, _) = extract_queue();
 
-                let index = usize::from_le_bytes(index_buffer);
+                // Remove the script from the queue
+                let result = queue_locked.remove(index);
 
-                {
-                    let (queue, _) = &SCRIPT_QUEUE;
+                if result.is_none() {
+                    info!("Bad request. No such script");
 
-                    let Ok(mut queue) = queue.lock() else {
-                        notify_warning(
-                            "Unable to remove from queue!",
-                            &mut stream,
-                            UNABLE_TO_REMOVE_FROM_QUEUE,
-                        );
+                    let resp = RespApi::Error(String::from("No such script"));
 
-                        return;
-                    };
+                    let resp_packet = Packet::from(resp);
 
-                    let result = queue.remove(index);
+                    let write_result = send_packet(&mut stream, resp_packet);
 
-                    if result.is_none() {
-                        notify_warning(
-                            "Unable to remove from queue! Index out of bounds!",
-                            &mut stream,
-                            UNABLE_TO_REMOVE_FROM_QUEUE_NO_SUCH_SCRIPT,
-                        );
+                    if let Err(e) = write_result {
+                        // If writing failed then it's likely we won't be able to recover, so we quit the connection
+                        report_write_error(e);
 
                         return;
                     }
+
+                    continue;
                 }
-            }
-            Api::Disconnect => {
-                // Disconnect by dropping the TcpStream
-                return;
             }
         }
 
-        // Send back the response code 0 - SUCCESS!
-        let write_result = stream.write_all(&SUCCESS);
+        // If we're here then everything went smoothly and we can report that back
+        let write_res = send_packet(&mut stream, Packet::from(RespApi::Success));
 
-        if let Err(e) = write_result {
-            error!("Unable to write to socket! Error: {:?}", e);
+        if let Err(e) = write_res {
+            report_write_error(e);
 
             return;
         }
     }
+}
+
+fn extract_queue() -> (
+    std::sync::MutexGuard<'static, std::collections::VecDeque<librtdbg::script::Script>>,
+    &'static std::sync::Condvar,
+) {
+    let (queue, condvar) = &SCRIPT_QUEUE;
+
+    let queue_locked = match queue.lock() {
+        Ok(queue) => queue,
+        Err(e) => {
+            error!("Unable to lock queue, poisoned! Error: {:?}. Exiting...", e);
+
+            exit(1);
+        }
+    };
+    (queue_locked, condvar)
 }
