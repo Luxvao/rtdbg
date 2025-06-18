@@ -1,4 +1,6 @@
-use std::fmt::Display;
+use std::{fmt::Display, process::exit};
+
+use log::warn;
 
 // Generic error for this library
 #[derive(Debug)]
@@ -42,5 +44,18 @@ impl From<std::string::FromUtf8Error> for Error {
 impl From<Vec<u8>> for Error {
     fn from(value: Vec<u8>) -> Self {
         Error::VecU8Error(value)
+    }
+}
+
+pub fn unwrap_or_shutdown<T, E>(res: Result<T, E>) -> T
+where
+    Error: From<E>,
+{
+    match res {
+        Ok(t) => t,
+        Err(e) => {
+            warn!("Error occured, shutting down! Error: {}", Error::from(e));
+            exit(1);
+        }
     }
 }
