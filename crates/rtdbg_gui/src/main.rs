@@ -1,9 +1,9 @@
 mod preload;
 mod run;
 
-use std::sync::mpsc::Receiver;
+use std::{f32, sync::mpsc::Receiver};
 
-use egui::{CentralPanel, TextEdit};
+use egui::{CentralPanel, Layout, ScrollArea, TextEdit, Vec2};
 use preload::preload;
 
 fn main() -> eframe::Result {
@@ -52,12 +52,24 @@ impl eframe::App for RtdbgGui {
                         // Output text
                         ui.vertical(|ui| {
                             ui.label("Output:");
-                            ui.add(
-                                TextEdit::multiline(&mut self.output)
-                                    .desired_rows(30)
-                                    .interactive(false),
-                            );
 
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(ui.available_width(), 30f32),
+                                Layout::top_down(egui::Align::Min),
+                                |ui| {
+                                    ScrollArea::vertical()
+                                        .scroll_bar_visibility(
+                                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                                        )
+                                        .id_salt("Output scroll area")
+                                        .show(ui, |ui| {
+                                            ui.add(
+                                                TextEdit::multiline(&mut self.output)
+                                                    .desired_rows(30),
+                                            );
+                                        })
+                                },
+                            );
                             let response = ui.button("Inject");
 
                             if response.clicked() {
@@ -68,7 +80,25 @@ impl eframe::App for RtdbgGui {
                         // Script editor
                         ui.vertical(|ui| {
                             ui.label("Script:");
-                            ui.add(TextEdit::multiline(&mut self.script).desired_rows(30));
+
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(ui.available_width(), 31f32),
+                                Layout::top_down(egui::Align::Min),
+                                |ui| {
+                                    ScrollArea::vertical()
+                                        .scroll_bar_visibility(
+                                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                                        )
+                                        .id_salt("Script scroll area")
+                                        .show(ui, |ui| {
+                                            ui.add(
+                                                TextEdit::multiline(&mut self.script)
+                                                    .desired_rows(30)
+                                                    .code_editor(),
+                                            );
+                                        })
+                                },
+                            );
 
                             let run_response = ui.button("Run");
 
