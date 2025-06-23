@@ -4,8 +4,8 @@ use rhai::Engine;
 pub fn setup_engine(engine: &mut Engine) {
     register_fns!(engine, {
         "read_mem" => read_mem,
-        "write_mem_arr" => write_mem_arr,
-        "write_mem_string" => write_mem_string
+        "write_mem" => write_mem_arr,
+        "write_mem" => write_mem_string
     });
 }
 

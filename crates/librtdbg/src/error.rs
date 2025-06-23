@@ -9,6 +9,9 @@ pub enum Error {
     TryFromSliceError(std::array::TryFromSliceError),
     FromUtf8Error(std::string::FromUtf8Error),
     VecU8Error(Vec<u8>),
+    SendError(std::sync::mpsc::SendError<String>),
+    ParseIntError(std::num::ParseIntError),
+    OtherError(&'static str),
 }
 
 // Trait implementations for Error
@@ -19,6 +22,9 @@ impl Display for Error {
             Error::TryFromSliceError(e) => write!(f, "Try from slice error: {:?}", e),
             Error::FromUtf8Error(e) => write!(f, "From UTF8 error: {:?}", e),
             Error::VecU8Error(e) => write!(f, "Vec<u8> error: {:?}", e),
+            Error::SendError(e) => write!(f, "Send error: {:?}", e),
+            Error::ParseIntError(e) => write!(f, "Parse int error: {:?}", e),
+            Error::OtherError(e) => write!(f, "Error: {}", e),
         }
     }
 }
@@ -44,6 +50,24 @@ impl From<std::string::FromUtf8Error> for Error {
 impl From<Vec<u8>> for Error {
     fn from(value: Vec<u8>) -> Self {
         Error::VecU8Error(value)
+    }
+}
+
+impl From<std::sync::mpsc::SendError<String>> for Error {
+    fn from(value: std::sync::mpsc::SendError<String>) -> Self {
+        Error::SendError(value)
+    }
+}
+
+impl From<std::num::ParseIntError> for Error {
+    fn from(value: std::num::ParseIntError) -> Self {
+        Error::ParseIntError(value)
+    }
+}
+
+impl From<&'static str> for Error {
+    fn from(value: &'static str) -> Self {
+        Error::OtherError(value)
     }
 }
 

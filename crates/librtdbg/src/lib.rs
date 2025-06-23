@@ -4,4 +4,6 @@ pub mod error;
 pub mod packet;
 pub mod proc_utils;
 pub mod rhai_utils;
+pub mod runtime_connection;
+pub mod runtime_extract;
 pub mod script;

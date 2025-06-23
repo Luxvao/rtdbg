@@ -6,6 +6,12 @@ pub struct Script {
     contents: String,
 }
 
+impl From<String> for Script {
+    fn from(value: String) -> Self {
+        Script { contents: value }
+    }
+}
+
 impl TryFrom<Vec<u8>> for Script {
     type Error = Error;
 
