@@ -1,11 +1,25 @@
-use librtdbg::register_fns;
-use rhai::Engine;
+use std::os::raw::c_void;
 
-pub fn setup_engine(engine: &mut Engine) {
+use librtdbg::{register_const, register_fns};
+use rhai::{Engine, Scope};
+
+pub fn setup_functions(engine: &mut Engine) {
     register_fns!(engine, {
         "read_mem" => read_mem,
         "write_mem" => write_mem_arr,
-        "write_mem" => write_mem_string
+        "write_mem" => write_mem_string,
+        "mprotect" => mprotect_rhai
+    });
+}
+
+pub fn setup_constants(scope: &mut Scope) {
+    register_const!(scope, {
+        "PROC_NONE" => libc::PROT_NONE,
+        "PROT_READ" => libc::PROT_READ,
+        "PROT_WRITE" => libc::PROT_WRITE,
+        "PROT_EXEC" => libc::PROT_EXEC,
+        "PROT_GROWSUP" => libc::PROT_GROWSUP,
+        "PROT_GROWSDOWN" => libc::PROT_GROWSDOWN
     });
 }
 
@@ -41,4 +55,23 @@ fn write_mem_string(addy: i64, new: String) {
     let new = new.as_bytes();
 
     write_mem_arr(addy, new.into());
+}
+
+// Mprotect wrapped for rhai - handles page boundaries itself
+fn mprotect_rhai(addy: i64, size: i64, prot: i32) -> i64 {
+    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+
+    let offset = addy % page_size;
+
+    let addy_aligned = addy - offset;
+
+    let size_with_adjustments = size + offset;
+
+    unsafe {
+        libc::mprotect(
+            addy_aligned as *mut c_void,
+            size_with_adjustments as usize,
+            prot as i32,
+        ) as i64
+    }
 }

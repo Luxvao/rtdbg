@@ -12,3 +12,4 @@ ctor = "0.4.2"
 log = "0.4.27"
 rhai = "1.22.0"
 librtdbg = { path = "../librtdbg" }
+libc = "0.2.174"

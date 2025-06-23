@@ -14,3 +14,13 @@ macro_rules! register_fns {
         )+
     };
 }
+
+// Same usage as above, just with different parameters
+#[macro_export]
+macro_rules! register_const {
+    ($scope:expr, {$($name:expr => $value:expr),+}) => {
+        $(
+            $scope.push_constant($name, $value);
+        )+
+    };
+}
