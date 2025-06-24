@@ -14,7 +14,7 @@ pub fn setup_functions(engine: &mut Engine) {
 
 pub fn setup_constants(scope: &mut Scope) {
     register_const!(scope, {
-        "PROC_NONE" => libc::PROT_NONE,
+        "PROT_NONE" => libc::PROT_NONE,
         "PROT_READ" => libc::PROT_READ,
         "PROT_WRITE" => libc::PROT_WRITE,
         "PROT_EXEC" => libc::PROT_EXEC,

@@ -1,4 +1,4 @@
-use std::{fmt::Display, process::exit};
+use std::{fmt::Display, process::exit, sync::PoisonError};
 
 use log::warn;
 
@@ -11,7 +11,8 @@ pub enum Error {
     VecU8Error(Vec<u8>),
     SendError(std::sync::mpsc::SendError<String>),
     ParseIntError(std::num::ParseIntError),
-    OtherError(&'static str),
+    PoisonError(std::sync::PoisonError<Box<dyn std::fmt::Debug>>),
+    OtherError(String),
 }
 
 // Trait implementations for Error
@@ -24,6 +25,7 @@ impl Display for Error {
             Error::VecU8Error(e) => write!(f, "Vec<u8> error: {:?}", e),
             Error::SendError(e) => write!(f, "Send error: {:?}", e),
             Error::ParseIntError(e) => write!(f, "Parse int error: {:?}", e),
+            Error::PoisonError(e) => write!(f, "Poison error: {:?}", e),
             Error::OtherError(e) => write!(f, "Error: {}", e),
         }
     }
@@ -65,8 +67,20 @@ impl From<std::num::ParseIntError> for Error {
     }
 }
 
+impl From<std::sync::PoisonError<Box<dyn std::fmt::Debug>>> for Error {
+    fn from(value: std::sync::PoisonError<Box<dyn std::fmt::Debug>>) -> Self {
+        Error::PoisonError(value)
+    }
+}
+
 impl From<&'static str> for Error {
     fn from(value: &'static str) -> Self {
+        Error::OtherError(value.to_string())
+    }
+}
+
+impl From<String> for Error {
+    fn from(value: String) -> Self {
         Error::OtherError(value)
     }
 }

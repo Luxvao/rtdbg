@@ -3,7 +3,7 @@ mod run;
 
 use std::{f32, sync::mpsc::Receiver};
 
-use egui::{CentralPanel, Layout, ScrollArea, TextEdit, Vec2};
+use egui::{CentralPanel, Layout, ScrollArea, TextEdit, Vec2, Window};
 use preload::preload;
 
 fn main() -> eframe::Result {
@@ -22,7 +22,6 @@ struct RtdbgGui {
     script: String,
     inject_menu_enabled: bool,
     inject_pid_path: String,
-
     // Child output receiver
     receiver: Option<Receiver<String>>,
 
@@ -41,84 +40,83 @@ impl eframe::App for RtdbgGui {
         }
 
         // Main window
-        if !self.inject_menu_enabled && !self.display_error {
-            CentralPanel::default().show(ctx, |ui| {
-                ui.vertical(|ui| {
-                    // Add the PID label
-                    ui.label(format!("PID: {}", self.pid));
+        CentralPanel::default().show(ctx, |ui| {
+            ui.vertical_centered_justified(|ui| {
+                ui.label(format!("PID: {}", self.pid));
 
-                    // Text editors
-                    ui.horizontal(|ui| {
-                        // Output text
-                        ui.vertical(|ui| {
-                            ui.label("Output:");
+                let total_width = ui.available_width();
 
-                            ui.allocate_ui_with_layout(
-                                Vec2::new(ui.available_width(), 30f32),
-                                Layout::top_down(egui::Align::Min),
-                                |ui| {
-                                    ScrollArea::vertical()
-                                        .scroll_bar_visibility(
-                                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                                        )
-                                        .id_salt("Output scroll area")
-                                        .show(ui, |ui| {
-                                            ui.add(
-                                                TextEdit::multiline(&mut self.output)
-                                                    .desired_rows(30),
-                                            );
-                                        })
-                                },
-                            );
-                            let response = ui.button("Inject");
+                let total_height = ui.available_height();
 
-                            if response.clicked() {
-                                self.inject_menu_enabled = true;
+                let spacing = ui.spacing().item_spacing.x;
+
+                let column_width = (total_width - spacing) / 2.0;
+
+                ui.horizontal(|ui| {
+                    // Output
+                    ui.vertical(|ui| {
+                        ui.set_min_width(column_width);
+
+                        ui.label("Output:");
+
+                        ScrollArea::vertical()
+                            .id_salt("Output scroller")
+                            .min_scrolled_height(total_height - 40.0)
+                            .show(ui, |ui| {
+                                ui.add_sized(
+                                    Vec2 {
+                                        x: column_width,
+                                        y: total_height - 40.0,
+                                    },
+                                    TextEdit::multiline(&mut self.output).interactive(false),
+                                )
+                            });
+
+                        let inject_button = ui.button("Inject");
+
+                        if inject_button.clicked() {
+                            self.inject_menu_enabled = true;
+                        }
+                    });
+
+                    // Script
+                    ui.vertical(|ui| {
+                        ui.set_min_height(ui.available_height());
+
+                        ui.set_min_width(column_width);
+
+                        ui.label("Script:");
+
+                        ScrollArea::vertical()
+                            .id_salt("Script scroller")
+                            .min_scrolled_height(total_height - 40.0)
+                            .show(ui, |ui| {
+                                ui.add_sized(
+                                    Vec2 {
+                                        x: column_width,
+                                        y: total_height - 40.0,
+                                    },
+                                    TextEdit::multiline(&mut self.script).code_editor(),
+                                )
+                            });
+                        let run_button = ui.button("Run");
+
+                        if run_button.clicked() {
+                            let res = run::run_script(self.script.clone());
+
+                            if let Err(e) = res {
+                                self.error = format!("{}", e);
+                                self.display_error = true;
                             }
-                        });
-
-                        // Script editor
-                        ui.vertical(|ui| {
-                            ui.label("Script:");
-
-                            ui.allocate_ui_with_layout(
-                                Vec2::new(ui.available_width(), 31f32),
-                                Layout::top_down(egui::Align::Min),
-                                |ui| {
-                                    ScrollArea::vertical()
-                                        .scroll_bar_visibility(
-                                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                                        )
-                                        .id_salt("Script scroll area")
-                                        .show(ui, |ui| {
-                                            ui.add(
-                                                TextEdit::multiline(&mut self.script)
-                                                    .desired_rows(30)
-                                                    .code_editor(),
-                                            );
-                                        })
-                                },
-                            );
-
-                            let run_response = ui.button("Run");
-
-                            if run_response.clicked() {
-                                let res = run::run_script(self.pid, self.script.clone());
-
-                                if let Err(e) = res {
-                                    self.error = format!("{e}");
-                                    self.display_error = true;
-                                }
-                            }
-                        });
+                        }
                     });
                 });
             });
-        }
+        });
 
         // Inject window
         if self.inject_menu_enabled && !self.display_error {
-            CentralPanel::default().show(ctx, |ui| {
+            Window::new("Inject").auto_sized().show(ctx, |ui| {
                 ui.vertical(|ui| {
                     // Label
                     ui.label("PID/Path:");
@@ -129,9 +127,17 @@ impl eframe::App for RtdbgGui {
 
                         let ptrace_reseponse = ui.button("Ptrace");
 
-                        let return_response = ui.button("Return");
+                        let return_response = ui.button("Close");
 
                         if preload_resopnse.clicked() {
+                            if self.pid != 0 {
+                                self.error = "A process is already being controlled!".to_string();
+
+                                self.display_error = true;
+
+                                return;
+                            }
+
                             let res = preload(
                                 ctx,
                                 self.inject_pid_path.clone(),
@@ -149,6 +155,14 @@ impl eframe::App for RtdbgGui {
                         }
 
                         if ptrace_reseponse.clicked() {
+                            if self.pid != 0 {
+                                self.error = "A process is already being controlled!".to_string();
+
+                                self.display_error = true;
+
+                                return;
+                            }
+
                             self.error = String::from("Not yet implemented!");
                             self.display_error = true;
                         }
@@ -163,7 +177,7 @@ impl eframe::App for RtdbgGui {
 
         // Errors
         if self.display_error {
-            CentralPanel::default().show(ctx, |ui| {
+            Window::new("Error").auto_sized().show(ctx, |ui| {
                 ui.vertical(|ui| {
                     ui.label(&self.error);
                     let close_response = ui.button("Close");

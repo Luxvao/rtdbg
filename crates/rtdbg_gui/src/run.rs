@@ -1,10 +1,22 @@
-use librtdbg::{
-    api::ReqApi, comms::send_packet, error::Error, packet::Packet, runtime_connection,
-    script::Script,
+use std::{
+    os::unix::net::UnixStream,
+    sync::{Mutex, PoisonError},
 };
 
-pub fn run_script(pid: u32, script_contents: String) -> Result<(), Error> {
-    let mut socket = runtime_connection::connect(pid)?;
+use librtdbg::{api::ReqApi, comms::send_packet, error::Error, packet::Packet, script::Script};
+
+pub static STREAM: Mutex<Option<UnixStream>> = Mutex::new(None);
+
+pub fn run_script(script_contents: String) -> Result<(), Error> {
+    // Just doing PoisonError -> String here. I can't be bothered to deal with From<PoisonError<T>>
+    let Some(ref mut socket) = *STREAM
+        .lock()
+        .map_err(|e| PoisonError::new(Box::new(e.into_inner()) as Box<dyn std::fmt::Debug>))?
+    else {
+        return Err(Error::OtherError(
+            "No binary process being analysed!".to_string(),
+        ));
+    };
 
     // Send script
     let script = Script::from(script_contents);
@@ -13,14 +25,14 @@ pub fn run_script(pid: u32, script_contents: String) -> Result<(), Error> {
 
     let add_to_queue_packet = Packet::from(add_to_queue_req);
 
-    send_packet(&mut socket, add_to_queue_packet)?;
+    send_packet(socket, add_to_queue_packet)?;
 
     // Send disconnect packet
     let disconnect = ReqApi::Disconnect;
 
     let disconnect_packet = Packet::from(disconnect);
 
-    send_packet(&mut socket, disconnect_packet)?;
+    send_packet(socket, disconnect_packet)?;
 
     Ok(())
 }
