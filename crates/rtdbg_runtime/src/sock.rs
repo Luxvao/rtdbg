@@ -21,6 +21,12 @@ fn setup_sock() -> String {
     format!("/tmp/rtdbg-{}.sock", pid)
 }
 
+fn clean_sock() {
+    let sock_path = setup_sock();
+
+    let _ = std::fs::remove_file(sock_path);
+}
+
 pub fn io() {
     let Ok(listener) = UnixListener::bind(SOCKET_PATH.clone()) else {
         error!("Failed to bind the socket, exiting!");
@@ -57,6 +63,10 @@ fn handle_client(mut stream: UnixStream) {
             ReqApi::Disconnect => {
                 return;
             }
+            ReqApi::Shutdown => {
+                clean_sock();
+                exit(0);
+            }
             ReqApi::AddToQueue { script } => {
                 let (mut queue_locked, condvar) = extract_queue();
 
@@ -75,7 +85,7 @@ fn handle_client(mut stream: UnixStream) {
                 if result.is_none() {
                     info!("Bad request. No such script");
 
-                    let resp = RespApi::Error(String::from("No such script"));
+                    let resp = RespApi::Failure(String::from("No such script"));
 
                     let resp_packet = Packet::from(resp);
 

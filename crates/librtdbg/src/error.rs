@@ -1,4 +1,4 @@
-use std::{fmt::Display, process::exit, sync::PoisonError};
+use std::{fmt::Display, process::exit};
 
 use log::warn;
 
@@ -11,7 +11,7 @@ pub enum Error {
     VecU8Error(Vec<u8>),
     SendError(std::sync::mpsc::SendError<String>),
     ParseIntError(std::num::ParseIntError),
-    PoisonError(std::sync::PoisonError<Box<dyn std::fmt::Debug>>),
+    PoisonError(String),
     OtherError(String),
 }
 
@@ -67,9 +67,12 @@ impl From<std::num::ParseIntError> for Error {
     }
 }
 
-impl From<std::sync::PoisonError<Box<dyn std::fmt::Debug>>> for Error {
-    fn from(value: std::sync::PoisonError<Box<dyn std::fmt::Debug>>) -> Self {
-        Error::PoisonError(value)
+impl<T> From<std::sync::PoisonError<T>> for Error
+where
+    T: std::fmt::Debug,
+{
+    fn from(value: std::sync::PoisonError<T>) -> Self {
+        Error::PoisonError(format!("{:?}", value))
     }
 }
 

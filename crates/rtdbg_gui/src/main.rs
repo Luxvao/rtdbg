@@ -1,10 +1,17 @@
 mod preload;
 mod run;
 
-use std::{f32, sync::mpsc::Receiver};
+use std::sync::mpsc::Receiver;
 
-use egui::{CentralPanel, Layout, ScrollArea, TextEdit, Vec2, Window};
-use preload::preload;
+use egui::{CentralPanel, Color32, ScrollArea, TextEdit, Vec2, Window};
+use librtdbg::{
+    api::{ReqApi, RespApi},
+    comms::send_packet,
+    packet::Packet,
+    runtime_connection::connect,
+};
+use preload::{CHILD, preload};
+use run::STREAM;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions::default();
@@ -41,8 +48,69 @@ impl eframe::App for RtdbgGui {
 
         // Main window
         CentralPanel::default().show(ctx, |ui| {
-            ui.vertical_centered_justified(|ui| {
-                ui.label(format!("PID: {}", self.pid));
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(format!("PID: {}", self.pid));
+
+                    if self.pid != 0 {
+                        let kill_button = ui.button("Kill");
+
+                        if kill_button.clicked() {
+                            // Get rid of the runtime
+                            librtdbg::runtime_extract::clean();
+
+                            let mut stream = match STREAM.lock() {
+                                Ok(stream) => stream,
+                                Err(e) => {
+                                    self.error = format!("{}", e);
+                                    self.display_error = true;
+
+                                    return;
+                                }
+                            };
+
+                            let shutdown_req = ReqApi::Shutdown;
+
+                            let shutdown_packet = Packet::from(shutdown_req);
+
+                            if let Some(stream) = stream.as_mut() {
+                                self.pid = 0;
+
+                                let res = send_packet(stream, shutdown_packet);
+
+                                if let Err(e) = res {
+                                    self.error = format!("{}", e);
+                                    self.display_error = true;
+
+                                    return;
+                                }
+
+                                return;
+                            }
+
+                            let mut stream = match connect(self.pid) {
+                                Ok(stream) => stream,
+                                Err(e) => {
+                                    self.error = format!("{}", e);
+                                    self.display_error = true;
+
+                                    return;
+                                }
+                            };
+
+                            let res = send_packet(&mut stream, shutdown_packet);
+
+                            if let Err(e) = res {
+                                self.error = format!("{}", e);
+                                self.display_error = true;
+
+                                return;
+                            }
+
+                            self.pid = 0;
+                        }
+                    }
+                });
 
                 let total_width = ui.available_width();
 
@@ -68,7 +136,9 @@ impl eframe::App for RtdbgGui {
                                         x: column_width,
                                         y: total_height - 40.0,
                                     },
-                                    TextEdit::multiline(&mut self.output).interactive(false),
+                                    TextEdit::multiline(&mut self.output.as_str())
+                                        .code_editor()
+                                        .background_color(Color32::BLACK),
                                 )
                             });
 
@@ -102,7 +172,7 @@ impl eframe::App for RtdbgGui {
                         let run_button = ui.button("Run");
 
                         if run_button.clicked() {
-                            let res = run::run_script(self.script.clone());
+                            let res = run::run_script(self.pid, self.script.clone());
 
                             if let Err(e) = res {
                                 self.error = format!("{}", e);

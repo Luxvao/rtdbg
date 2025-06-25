@@ -12,3 +12,7 @@ pub fn extract() -> Result<String, Error> {
 
     Ok(RTDBG_RUNTIME_PATH.to_string())
 }
+
+pub fn clean() {
+    let _ = std::fs::remove_file(RTDBG_RUNTIME_PATH);
+}

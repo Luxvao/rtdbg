@@ -9,6 +9,7 @@ use crate::{error::Error, packet::Packet, script::Script};
 #[derive(Debug, Clone)]
 pub enum ReqApi {
     Disconnect,
+    Shutdown,
     AddToQueue { script: Script },
     RemoveFromQueue { index: usize },
 }
@@ -17,7 +18,7 @@ pub enum ReqApi {
 #[derive(Debug, Clone)]
 pub enum RespApi {
     Success,
-    Error(String),
+    Failure(String),
 }
 
 impl TryFrom<Packet> for ReqApi {
@@ -26,26 +27,40 @@ impl TryFrom<Packet> for ReqApi {
     fn try_from(packet: Packet) -> Result<Self, Self::Error> {
         match *packet.get_action() {
             0 => Ok(ReqApi::Disconnect),
-            1 => Ok(ReqApi::AddToQueue {
+            1 => Ok(ReqApi::Shutdown),
+            2 => Ok(ReqApi::AddToQueue {
                 script: Script::try_from(packet.get_payload().clone())?,
             }),
-            2 => Ok(ReqApi::RemoveFromQueue {
+            3 => Ok(ReqApi::RemoveFromQueue {
                 index: usize::from_le_bytes(packet.get_payload().clone().try_into()?),
             }),
-            _ => {
-                todo!()
-            }
+            _ => Err(Error::from("Invalid packet received!")),
         }
     }
 }
 
-// Trait implementations
+impl TryFrom<Packet> for RespApi {
+    type Error = Error;
+
+    fn try_from(packet: Packet) -> Result<Self, Self::Error> {
+        match *packet.get_action() {
+            0 => Ok(RespApi::Success),
+            1 => Ok(RespApi::Failure(String::from_utf8(
+                packet.get_payload().clone(),
+            )?)),
+            _ => Err(Error::from("Invalid packet received!")),
+        }
+    }
+}
+
+// Trait implementations for built-ins
 impl From<ReqApi> for u8 {
     fn from(val: ReqApi) -> Self {
         match val {
             ReqApi::Disconnect => 0,
-            ReqApi::AddToQueue { script: _ } => 1,
-            ReqApi::RemoveFromQueue { index: _ } => 2,
+            ReqApi::Shutdown => 1,
+            ReqApi::AddToQueue { script: _ } => 2,
+            ReqApi::RemoveFromQueue { index: _ } => 3,
         }
     }
 }
@@ -54,7 +69,7 @@ impl From<RespApi> for u8 {
     fn from(val: RespApi) -> Self {
         match val {
             RespApi::Success => 0,
-            RespApi::Error(_) => 1,
+            RespApi::Failure(_) => 1,
         }
     }
 }

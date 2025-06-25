@@ -12,7 +12,7 @@ pub fn report_error(stream: &mut UnixStream, e: Error) {
     info!("{error_str}");
 
     // Turn it into a response
-    let resp = RespApi::Error(error_str);
+    let resp = RespApi::Failure(error_str);
 
     // Then into a packet
     let packet = Packet::from(resp);

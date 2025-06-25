@@ -71,7 +71,7 @@ fn mprotect_rhai(addy: i64, size: i64, prot: i32) -> i64 {
         libc::mprotect(
             addy_aligned as *mut c_void,
             size_with_adjustments as usize,
-            prot as i32,
+            prot,
         ) as i64
     }
 }

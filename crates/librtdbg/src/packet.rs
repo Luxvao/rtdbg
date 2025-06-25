@@ -39,6 +39,7 @@ impl From<ReqApi> for Packet {
 
         let payload = match value {
             ReqApi::Disconnect => Vec::new(),
+            ReqApi::Shutdown => Vec::new(),
             ReqApi::AddToQueue { script } => script.get_contents().as_bytes().into(),
             ReqApi::RemoveFromQueue { index } => index.to_le_bytes().into(),
         };
@@ -54,7 +55,7 @@ impl From<RespApi> for Packet {
 
         let payload = match value {
             RespApi::Success => Vec::new(),
-            RespApi::Error(e) => e.as_bytes().into(),
+            RespApi::Failure(e) => e.as_bytes().into(),
         };
 
         Packet { action, payload }

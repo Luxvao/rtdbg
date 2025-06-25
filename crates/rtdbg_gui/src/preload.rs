@@ -1,7 +1,10 @@
 use std::{
     io::{BufRead, BufReader},
-    process::{Command, Stdio},
-    sync::mpsc::{self, Receiver},
+    process::{Child, Command, Stdio},
+    sync::{
+        Mutex,
+        mpsc::{self, Receiver},
+    },
     thread,
 };
 
@@ -9,6 +12,8 @@ use librtdbg::{
     error::{Error, unwrap_or_shutdown},
     runtime_extract,
 };
+
+pub static CHILD: Mutex<Option<Child>> = Mutex::new(None);
 
 pub fn preload(
     ctx: &egui::Context,
@@ -34,6 +39,8 @@ pub fn preload(
 
     thread::spawn(move || {
         let stdout = child.stdout.take();
+
+        *unwrap_or_shutdown(CHILD.lock()) = Some(child);
 
         if let Some(stdout) = stdout {
             let mut bufreader = BufReader::new(stdout);
