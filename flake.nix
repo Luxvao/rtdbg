@@ -20,13 +20,18 @@
         buildInputs = [
           pkg-config
           eza
-          fish
           rust-bin.stable.latest.default
           rust-analyzer
+          wayland
+          libxkbcommon
+          just
         ];
 
         shellHook = ''
-          fish
+          export LD_LIBRARY_PATH=${pkgs.wayland}/lib:${pkgs.libxkbcommon}/lib:/run/opengl-driver/lib:$LD_LIBRARY_PATH
+
+          zsh
+          exit
         '';
       };
     }

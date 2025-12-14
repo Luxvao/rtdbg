@@ -3,6 +3,9 @@ name = "librtdbg"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+runtime_included = []
+
 [dependencies]
 log = "0.4.27"
 rhai = "1.22.2"
