@@ -1,6 +1,9 @@
 use std::os::raw::c_void;
 
-use librtdbg::{register_const, register_fns};
+use librtdbg::{
+    proc_utils::{Permissions, Process, Vma, Vmas},
+    register_const, register_fns, register_types,
+};
 use rhai::{Engine, Scope};
 
 pub fn setup_functions(engine: &mut Engine) {
@@ -21,6 +24,10 @@ pub fn setup_constants(scope: &mut Scope) {
         "PROT_GROWSUP" => libc::PROT_GROWSUP,
         "PROT_GROWSDOWN" => libc::PROT_GROWSDOWN
     });
+}
+
+pub fn setup_types(engine: &mut Engine) {
+    register_types!(engine, { Permissions, Vma, Vmas, Process });
 }
 
 // Reading a specific amount of data from an address into an array

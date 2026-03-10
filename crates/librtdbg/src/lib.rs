@@ -7,3 +7,5 @@ pub mod rhai_utils;
 pub mod runtime_connection;
 pub mod runtime_extract;
 pub mod script;
+#[cfg(test)]
+mod tests;

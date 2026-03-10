@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5.39", features = [ "derive" ] }
 nix = { version = "0.30.1", features = [ "ptrace" ] }
-librtdbg = { path = "../librtdbg", features = [ "runtime_included" ] }
+librtdbg = { path = "../librtdbg", features = [ "include_runtime" ] }
+color-eyre = "0.6.5"

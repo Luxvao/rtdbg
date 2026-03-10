@@ -9,7 +9,7 @@ pub static STREAM: Mutex<Option<UnixStream>> = Mutex::new(None);
 
 pub fn run_script(pid: u32, script_contents: String) -> Result<(), Error> {
     // Just doing PoisonError -> String here. I can't be bothered to deal with From<PoisonError<T>>
-    let mut stream = STREAM.lock()?;
+    let mut stream = STREAM.lock().map_err(|_| Error::MutexPoisoned)?;
 
     if stream.is_none() {
         *stream = Some(connect(pid)?);

@@ -1,10 +1,8 @@
 mod inject;
 mod start;
 
-use clap::{ArgAction, Parser, Subcommand, command};
-
-const RTDBG_RUNTIME_PATH: &str = "/tmp/rtdbg.so";
-const DBG_RUNTIME: &[u8] = include_bytes!("../../../target/release/librtdbg_runtime.so");
+use clap::{ArgAction, Parser, Subcommand};
+use color_eyre::eyre::Result;
 
 #[derive(Parser)]
 #[command(name = "rtdbg", version, about = "rtdbg - A realtime debugging toolkit", long_about = None)]
@@ -38,7 +36,9 @@ enum Commands {
     },
 }
 
-fn main() {
+fn main() -> Result<()> {
+    color_eyre::install()?;
+
     let args = Args::parse();
 
     let command = args.command;

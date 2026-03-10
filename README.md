@@ -13,7 +13,7 @@ Rtdbg aims to be a frida-like tool (it's nowhere close yet and likely never will
 - Ptrace-based runtime injection
 - Static binary patching to automatically load the runtime without any rtdbg loaders
 - Event support in rhai
-- Better script managing
+- Better script management
 
 ## API Features
 - Write mem (both strings and vectors as input parameters in rhai)

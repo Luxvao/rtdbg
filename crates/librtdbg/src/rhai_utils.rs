@@ -15,6 +15,15 @@ macro_rules! register_fns {
     };
 }
 
+#[macro_export]
+macro_rules! register_types {
+    ($engine:expr, {$($type:ident),+}) => {
+        $(
+            $engine.build_type::<$type>();
+        )+
+    };
+}
+
 // Same usage as above, just with different parameters
 #[macro_export]
 macro_rules! register_const {

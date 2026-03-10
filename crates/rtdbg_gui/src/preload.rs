@@ -8,10 +8,7 @@ use std::{
     thread,
 };
 
-use librtdbg::{
-    error::{Error, unwrap_or_shutdown},
-    runtime_extract,
-};
+use librtdbg::{error::Error, runtime_extract};
 
 pub static CHILD: Mutex<Option<Child>> = Mutex::new(None);
 
@@ -40,7 +37,7 @@ pub fn preload(
     thread::spawn(move || {
         let stdout = child.stdout.take();
 
-        *unwrap_or_shutdown(CHILD.lock()) = Some(child);
+        *CHILD.lock().unwrap() = Some(child);
 
         if let Some(stdout) = stdout {
             let mut bufreader = BufReader::new(stdout);
@@ -48,9 +45,9 @@ pub fn preload(
             loop {
                 let mut buffer = String::new();
 
-                unwrap_or_shutdown(bufreader.read_line(&mut buffer));
+                bufreader.read_line(&mut buffer).unwrap();
 
-                unwrap_or_shutdown(send.send(buffer));
+                send.send(buffer).unwrap();
 
                 ctx.request_repaint();
             }

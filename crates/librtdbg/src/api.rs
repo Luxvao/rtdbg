@@ -32,9 +32,15 @@ impl TryFrom<Packet> for ReqApi {
                 script: Script::try_from(packet.get_payload().clone())?,
             }),
             3 => Ok(ReqApi::RemoveFromQueue {
-                index: usize::from_le_bytes(packet.get_payload().clone().try_into()?),
+                index: usize::from_le_bytes(
+                    packet
+                        .get_payload()
+                        .clone()
+                        .try_into()
+                        .map_err(|_| Error::InvalidPacket(packet))?,
+                ),
             }),
-            _ => Err(Error::from("Invalid packet received!")),
+            _ => Err(Error::InvalidPacket(packet)),
         }
     }
 }
@@ -48,7 +54,7 @@ impl TryFrom<Packet> for RespApi {
             1 => Ok(RespApi::Failure(String::from_utf8(
                 packet.get_payload().clone(),
             )?)),
-            _ => Err(Error::from("Invalid packet received!")),
+            _ => Err(Error::InvalidPacket(packet)),
         }
     }
 }

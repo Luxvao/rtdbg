@@ -6,4 +6,4 @@ edition = "2024"
 [dependencies]
 eframe = "0.31.1"
 egui = "0.31.1"
-librtdbg = { path="../librtdbg", features = [ "runtime_included" ] }
+librtdbg = { path="../librtdbg", features = [ "include_runtime" ] }

@@ -1,136 +1,195 @@
-use std::{fs::File, io::Read, path::PathBuf};
+use std::{fs::File, io::Read, ops::Deref, path::PathBuf};
 
-use crate::error::unwrap_or_shutdown;
+use rhai::{CustomType, Dynamic, EvalAltResult, TypeBuilder};
 
-#[derive(Debug, Clone, Default)]
+use crate::error::Error;
+
+#[derive(Debug, Clone, Default, CustomType)]
+#[rhai_type(extra = Self::build_extra)]
 pub struct Process {
+    #[rhai_type(skip)]
     pub pid: u32,
-    pub vmas: Vec<Vma>,
+    #[rhai_type(readonly)]
+    pub vmas: Vmas,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, CustomType)]
+#[rhai_type(extra = Self::build_extra)]
 pub struct Vma {
+    #[rhai_type(skip)]
     pub saddy: usize,
+    #[rhai_type(skip)]
     pub eaddy: usize,
+    #[rhai_type(readonly)]
     pub permissions: Permissions,
+    #[rhai_type(skip)]
     pub offset: usize,
+    #[rhai_type(readonly)]
     pub device: String,
+    #[rhai_type(skip)]
     pub inode: usize,
+    #[rhai_type(readonly)]
     pub path: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default, CustomType)]
+#[rhai_type(extra = Self::build_extra)]
+pub struct Vmas {
+    #[rhai_type(skip)]
+    vmas: Vec<Vma>,
+}
+
+#[derive(Debug, Clone, Copy, Default, CustomType)]
+#[rhai_type(extra = Self::build_extra)]
 pub struct Permissions {
+    #[rhai_type(readonly)]
     pub read: bool,
+    #[rhai_type(readonly)]
     pub write: bool,
+    #[rhai_type(readonly)]
     pub executable: bool,
+    #[rhai_type(readonly)]
     pub private: bool,
 }
 
-impl From<String> for Permissions {
-    fn from(value: String) -> Self {
-        let mut chars = value.chars();
-
-        let mut r = false;
-        let mut w = false;
-        let mut x = false;
-        let mut p = false;
-
-        if unwrap_or_shutdown(chars.next().ok_or("Read flag not present")) == 'r' {
-            r = true;
-        };
-
-        if unwrap_or_shutdown(chars.next().ok_or("Write flag not present")) == 'w' {
-            w = true;
-        }
-
-        if unwrap_or_shutdown(chars.next().ok_or("Executable flag not present")) == 'x' {
-            x = true;
-        }
-
-        if unwrap_or_shutdown(chars.next().ok_or("Private flag not present")) == 'p' {
-            p = true;
-        }
-
-        Permissions {
-            read: r,
-            write: w,
-            executable: x,
-            private: p,
-        }
-    }
-}
-
-impl From<&str> for Permissions {
-    fn from(value: &str) -> Self {
-        let value = value.to_string();
-
-        Permissions::from(value)
-    }
-}
-
 impl Process {
-    pub fn this() -> Process {
+    pub fn this() -> Result<Process, Error> {
         let pid = std::process::id();
 
-        let vmas = Vma::this();
+        let vmas = Vma::this()?;
 
-        Process { pid, vmas }
+        Ok(Process { pid, vmas })
     }
 
-    pub fn from_pid(pid: u32) -> Process {
-        let vmas = Vma::from_maps(PathBuf::from(format!("/proc/{pid}/maps")));
+    pub fn from_pid(pid: u32) -> Result<Process, Error> {
+        let maps_file = PathBuf::from(format!("/proc/{pid}/maps"));
 
-        Process { pid, vmas }
+        let vmas = Vmas::try_from(maps_file)?;
+
+        Ok(Process { pid, vmas })
+    }
+
+    fn get_pid(&mut self) -> i64 {
+        self.pid as i64
+    }
+
+    fn build_extra(builder: &mut TypeBuilder<Self>) {
+        builder
+            .with_fn("get_process", || -> Result<Process, Box<EvalAltResult>> {
+                match Self::this() {
+                    Ok(proc) => return Ok(proc),
+                    Err(e) => return Err(format!("{e}").into()),
+                }
+            })
+            .with_get("pid", Self::get_pid)
+            .on_print(|process| format!("{:?}", process));
     }
 }
 
 impl Vma {
-    pub fn this() -> Vec<Vma> {
+    pub fn this() -> Result<Vmas, Error> {
         let path = PathBuf::from("/proc/self/maps");
 
-        Self::from_maps(path)
+        Vmas::try_from(path)
     }
 
-    pub fn from_maps(maps: PathBuf) -> Vec<Vma> {
-        let mut maps_buffer = String::new();
+    fn get_saddy(&mut self) -> i64 {
+        self.saddy as i64
+    }
 
-        let mut maps_file = unwrap_or_shutdown(File::open(maps));
+    fn get_eaddy(&mut self) -> i64 {
+        self.eaddy as i64
+    }
 
-        unwrap_or_shutdown(maps_file.read_to_string(&mut maps_buffer));
+    fn get_offset(&mut self) -> i64 {
+        self.offset as i64
+    }
 
+    fn get_inode(&mut self) -> i64 {
+        self.inode as i64
+    }
+
+    fn build_extra(builder: &mut TypeBuilder<Self>) {
+        builder
+            .with_fn("get_vmas", || -> Result<Vmas, Box<EvalAltResult>> {
+                match Self::this() {
+                    Ok(vmas) => return Ok(vmas),
+                    Err(e) => return Err(format!("{e}").into()),
+                }
+            })
+            .with_get("saddy", Self::get_saddy)
+            .with_get("eaddy", Self::get_eaddy)
+            .with_get("offset", Self::get_offset)
+            .with_get("inode", Self::get_inode)
+            .on_print(|vma| format!("{:?}", vma));
+    }
+}
+
+impl TryFrom<PathBuf> for Vmas {
+    type Error = crate::error::Error;
+
+    fn try_from(value: PathBuf) -> Result<Self, Self::Error> {
+        let mut maps_file = File::open(value)?;
+
+        let mut maps_file_contents = String::new();
+
+        maps_file.read_to_string(&mut maps_file_contents)?;
+
+        Vmas::try_from(maps_file_contents)
+    }
+}
+
+impl TryFrom<&str> for Vmas {
+    type Error = crate::error::Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut vmas = Vec::new();
 
-        for line in maps_buffer.lines() {
+        for line in value.lines() {
             let mut parts = line.split(' ');
 
-            // Extract all the fields
-            let range = unwrap_or_shutdown(parts.next().ok_or("No range field"));
-            let permissions = unwrap_or_shutdown(parts.next().ok_or("No permissions field"));
-            let offset = unwrap_or_shutdown(parts.next().ok_or("No offset field"));
-            let device = unwrap_or_shutdown(parts.next().ok_or("No device offset field"));
-            let inode = unwrap_or_shutdown(parts.next().ok_or("No inode field"));
-            let path = parts.next();
+            // Extract the fields
+            let range = parts.next().ok_or(Error::VmaError(value.to_string()))?;
+            let permissions = parts.next().ok_or(Error::VmaError(value.to_string()))?;
+            let offset = parts.next().ok_or(Error::VmaError(value.to_string()))?;
+            let device = parts.next().ok_or(Error::VmaError(value.to_string()))?;
+            let inode = parts.next().ok_or(Error::VmaError(value.to_string()))?;
+            let path = parts.last();
+
+            let path = match path {
+                Some(path) => {
+                    if path.is_empty() {
+                        None
+                    } else {
+                        Some(path)
+                    }
+                }
+                None => None,
+            };
 
             // Split the range into saddy and eaddy
             let mut range_parts = range.split('-');
 
-            let saddy_str = unwrap_or_shutdown(range_parts.next().ok_or("No saddy field"));
-            let eaddy_str = unwrap_or_shutdown(range_parts.next().ok_or("No eaddy field"));
+            let saddy_str = range_parts
+                .next()
+                .ok_or(Error::VmaError(value.to_string()))?;
+            let eaddy_str = range_parts
+                .next()
+                .ok_or(Error::VmaError(value.to_string()))?;
 
-            let saddy = unwrap_or_shutdown(saddy_str.parse::<usize>());
-            let eaddy = unwrap_or_shutdown(eaddy_str.parse::<usize>());
+            let saddy = usize::from_str_radix(saddy_str, 16)?;
+            let eaddy = usize::from_str_radix(eaddy_str, 16)?;
 
             // Parse permissions
-            let permissions = Permissions::from(permissions);
+            let permissions = Permissions::try_from(permissions)?;
 
             // Parse offset
-            let offset = unwrap_or_shutdown(offset.parse::<usize>());
+            let offset = usize::from_str_radix(offset, 16)?;
 
             // Parse inode
-            let inode = unwrap_or_shutdown(inode.parse::<usize>());
+            let inode = inode.parse::<usize>()?;
 
-            let vma = Vma {
+            vmas.push(Vma {
                 saddy,
                 eaddy,
                 permissions,
@@ -138,11 +197,90 @@ impl Vma {
                 device: device.to_string(),
                 inode,
                 path: path.map(|s| s.to_string()),
-            };
-
-            vmas.push(vma);
+            });
         }
 
-        vmas
+        Ok(Vmas { vmas })
+    }
+}
+
+impl TryFrom<String> for Vmas {
+    type Error = crate::error::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_str())
+    }
+}
+
+impl Deref for Vmas {
+    type Target = [Vma];
+
+    fn deref(&self) -> &Self::Target {
+        &self.vmas
+    }
+}
+
+impl IntoIterator for Vmas {
+    type Item = Vma;
+
+    type IntoIter = std::vec::IntoIter<Vma>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.vmas.into_iter()
+    }
+}
+
+impl Vmas {
+    fn build_extra(builder: &mut TypeBuilder<Self>) {
+        builder.is_iterable().on_print(|vmas| format!("{:?}", vmas));
+    }
+}
+
+impl TryFrom<&str> for Permissions {
+    type Error = crate::error::Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let mut chars = value.chars();
+
+        let read = chars
+            .next()
+            .ok_or(Error::PermissionsError(value.to_string()))?
+            == 'r';
+
+        let write = chars
+            .next()
+            .ok_or(Error::PermissionsError(value.to_string()))?
+            == 'w';
+
+        let executable = chars
+            .next()
+            .ok_or(Error::PermissionsError(value.to_string()))?
+            == 'x';
+
+        let private = chars
+            .next()
+            .ok_or(Error::PermissionsError(value.to_string()))?
+            == 'p';
+
+        Ok(Permissions {
+            read,
+            write,
+            executable,
+            private,
+        })
+    }
+}
+
+impl TryFrom<String> for Permissions {
+    type Error = crate::error::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_str())
+    }
+}
+
+impl Permissions {
+    fn build_extra(builder: &mut TypeBuilder<Self>) {
+        builder.on_print(|permissions| format!("{:?}", permissions));
     }
 }

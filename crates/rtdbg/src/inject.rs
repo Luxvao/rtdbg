@@ -1,8 +1,9 @@
 use std::{fs::File, io::Read, os::unix::net::UnixStream, path::Path, process::exit};
 
+use color_eyre::eyre::{Context, Result};
 use librtdbg::{api::ReqApi, comms::send_packet, packet::Packet, script::Script};
 
-pub fn inject(pid: String, script: String) {
+pub fn inject(pid: String, script: String) -> Result<()> {
     let rtdbg_socket = format!("/tmp/rtdbg-{}.sock", pid);
 
     let rtdbg_socket = Path::new(&rtdbg_socket);
@@ -12,43 +13,22 @@ pub fn inject(pid: String, script: String) {
         exit(1);
     }
 
-    let Ok(mut stream) = UnixStream::connect(rtdbg_socket) else {
-        println!("Unable to connect to rtdbg socket! Try restarting the debuggee");
-        exit(1);
-    };
+    let mut stream = UnixStream::connect(rtdbg_socket)
+        .with_context(|| "Unable to connect to the rtdbg socket")?;
 
-    let Ok(mut script_file) = File::open(script) else {
-        println!("The script file does not exist!");
-        exit(1);
-    };
+    let mut script_file = File::open(script)?;
 
     let mut file_contents_buffer: Vec<u8> = Vec::new();
 
-    let read_result = script_file.read_to_end(&mut file_contents_buffer);
+    script_file.read_to_end(&mut file_contents_buffer)?;
 
-    if let Err(e) = read_result {
-        println!("Unable to read from file! Error: {e}");
-        exit(1);
-    }
-
-    let script = match Script::try_from(file_contents_buffer) {
-        Ok(script) => script,
-        Err(_) => {
-            println!("Script was not UTF8!");
-            exit(1);
-        }
-    };
+    let script = Script::try_from(file_contents_buffer)?;
 
     let req = ReqApi::AddToQueue { script };
 
     let packet = Packet::from(req);
 
-    let result = send_packet(&mut stream, packet);
-
-    if result.is_err() {
-        println!("Unable to write to rtdbg socket!");
-        exit(1);
-    }
+    send_packet(&mut stream, packet)?;
 
     let resp = Packet::read_from_stream(&mut stream);
 
@@ -56,4 +36,6 @@ pub fn inject(pid: String, script: String) {
     let _ = send_packet(&mut stream, Packet::from(ReqApi::Disconnect));
 
     println!("{:?}", resp);
+
+    Ok(())
 }

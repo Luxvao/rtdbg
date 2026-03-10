@@ -3,10 +3,7 @@ use std::process::exit;
 use log::{error, info};
 use rhai::{Engine, Scope};
 
-use crate::{
-    SCRIPT_QUEUE,
-    rhai_lib::{self, setup_constants},
-};
+use crate::{SCRIPT_QUEUE, rhai_lib};
 
 pub fn runtime() {
     // Set up the logger
@@ -20,6 +17,8 @@ pub fn runtime() {
 
     rhai_lib::setup_functions(&mut engine);
 
+    rhai_lib::setup_types(&mut engine);
+
     let (queue, condvar) = &SCRIPT_QUEUE;
 
     let Ok(mut queue) = queue.lock() else {
@@ -30,7 +29,7 @@ pub fn runtime() {
 
     let mut scope = Scope::new();
 
-    setup_constants(&mut scope);
+    rhai_lib::setup_constants(&mut scope);
 
     loop {
         queue = condvar.wait(queue).expect("I don't think this will ever happen, but just in case - runtime.rs line 29 - mutex is poisoned");
