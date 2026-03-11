@@ -30,6 +30,7 @@ impl Default for Script {
 
 impl Script {
     // Create an empty script
+    #[must_use] 
     pub fn new() -> Script {
         Script {
             contents: String::new(),
@@ -37,6 +38,7 @@ impl Script {
     }
 
     // Extract the script from this
+    #[must_use] 
     pub fn get_contents(&self) -> &String {
         &self.contents
     }

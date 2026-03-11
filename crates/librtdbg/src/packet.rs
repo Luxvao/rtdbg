@@ -85,11 +85,13 @@ impl Packet {
     }
 
     // Extract the action
+    #[must_use] 
     pub fn get_action(&self) -> &u8 {
         &self.action
     }
 
     // Extract the payload
+    #[must_use] 
     pub fn get_payload(&self) -> &Vec<u8> {
         &self.payload
     }

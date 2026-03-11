@@ -15,18 +15,18 @@ struct Args {
 enum Commands {
     /// Attach the rtdbg runtime or launch a program with it
     Start {
-        /// Uses LD_PRELOAD for injection instead (for ptrace sensitive programs)
+        /// Uses `LD_PRELOAD` for injection instead (for ptrace sensitive programs)
         #[arg(short, long, action = ArgAction::SetTrue)]
         preload: bool,
 
-        /// PID of the process or the path of the program to inject into (if using LD_PRELOAD)
+        /// PID of the process or the path of the program to inject into (if using `LD_PRELOAD`)
         #[arg(value_name = "PID|PROGRAM")]
         program: String,
     },
 
     /// Inject runtime scripts into programs that have the rtdbg runtime
     Inject {
-        /// PID of the process that has rtdbg_runtime injected
+        /// PID of the process that has `rtdbg_runtime` injected
         #[arg(value_name = "PID")]
         pid: String,
 

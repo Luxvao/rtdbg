@@ -70,13 +70,13 @@ impl Process {
     }
 
     fn get_pid(&mut self) -> i64 {
-        self.pid as i64
+        i64::from(self.pid)
     }
 
     fn build_extra(builder: &mut TypeBuilder<Self>) {
         builder
             .with_get("pid", Self::get_pid)
-            .on_print(|process| format!("{:?}", process));
+            .on_print(|process| format!("{process:?}"));
     }
 }
 
@@ -103,7 +103,7 @@ impl Vma {
             .with_get("eaddy", Self::get_eaddy)
             .with_get("offset", Self::get_offset)
             .with_get("inode", Self::get_inode)
-            .on_print(|vma| format!("{:?}", vma));
+            .on_print(|vma| format!("{vma:?}"));
     }
 }
 
@@ -167,7 +167,7 @@ impl TryFrom<&str> for Vmas {
                 offset,
                 device: device.to_string(),
                 inode,
-                path: path.map(|s| s.to_string()),
+                path: path.map(std::string::ToString::to_string),
             });
         }
 
@@ -209,7 +209,7 @@ impl Vmas {
     }
 
     fn build_extra(builder: &mut TypeBuilder<Self>) {
-        builder.is_iterable().on_print(|vmas| format!("{:?}", vmas));
+        builder.is_iterable().on_print(|vmas| format!("{vmas:?}"));
     }
 }
 
@@ -258,6 +258,6 @@ impl TryFrom<String> for Permissions {
 
 impl Permissions {
     fn build_extra(builder: &mut TypeBuilder<Self>) {
-        builder.on_print(|permissions| format!("{:?}", permissions));
+        builder.on_print(|permissions| format!("{permissions:?}"));
     }
 }

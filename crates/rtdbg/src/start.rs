@@ -8,10 +8,7 @@ use librtdbg::runtime_extract::{RTDBG_RUNTIME_PATH, clean, extract};
 use nix::{sys::ptrace::Options, unistd::Pid};
 
 pub fn start(preload_f: bool, program: String) -> Result<()> {
-    match preload_f {
-        false => use_ptrace(program),
-        true => use_preload(program),
-    }
+    if !preload_f { use_ptrace(program) } else { use_preload(program) }
 }
 
 fn use_ptrace(pid: String) -> Result<()> {

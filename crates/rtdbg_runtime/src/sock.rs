@@ -18,7 +18,7 @@ pub static SOCKET_PATH: LazyLock<String> = LazyLock::new(setup_sock);
 fn setup_sock() -> String {
     let pid = std::process::id();
 
-    format!("/tmp/rtdbg-{}.sock", pid)
+    format!("/tmp/rtdbg-{pid}.sock")
 }
 
 fn clean_sock() {
@@ -123,7 +123,7 @@ fn extract_queue() -> (
     let queue_locked = match queue.lock() {
         Ok(queue) => queue,
         Err(e) => {
-            error!("Unable to lock queue, poisoned! Error: {:?}. Exiting...", e);
+            error!("Unable to lock queue, poisoned! Error: {e:?}. Exiting...");
 
             exit(1);
         }

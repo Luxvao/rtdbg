@@ -4,7 +4,7 @@ use color_eyre::eyre::{Context, Result};
 use librtdbg::{api::ReqApi, comms::send_packet, packet::Packet, script::Script};
 
 pub fn inject(pid: String, script: String) -> Result<()> {
-    let rtdbg_socket = format!("/tmp/rtdbg-{}.sock", pid);
+    let rtdbg_socket = format!("/tmp/rtdbg-{pid}.sock");
 
     let rtdbg_socket = Path::new(&rtdbg_socket);
 
@@ -35,7 +35,7 @@ pub fn inject(pid: String, script: String) -> Result<()> {
     // We don't really care if it succeeds or not
     let _ = send_packet(&mut stream, Packet::from(ReqApi::Disconnect));
 
-    println!("{:?}", resp);
+    println!("{resp:?}");
 
     Ok(())
 }

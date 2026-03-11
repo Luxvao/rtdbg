@@ -87,10 +87,10 @@ fn mprotect_rhai(addy: i64, size: i64, prot: i32) -> i64 {
     let size_with_adjustments = size + offset;
 
     unsafe {
-        libc::mprotect(
+        i64::from(libc::mprotect(
             addy_aligned as *mut c_void,
             size_with_adjustments as usize,
             prot,
-        ) as i64
+        ))
     }
 }

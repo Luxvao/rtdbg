@@ -57,7 +57,7 @@ impl eframe::App for RtdbgGui {
                             let mut stream = match STREAM.lock() {
                                 Ok(stream) => stream,
                                 Err(e) => {
-                                    self.error = format!("{}", e);
+                                    self.error = format!("{e}");
                                     self.display_error = true;
 
                                     return;
@@ -74,7 +74,7 @@ impl eframe::App for RtdbgGui {
                                 let res = send_packet(stream, shutdown_packet);
 
                                 if let Err(e) = res {
-                                    self.error = format!("{}", e);
+                                    self.error = format!("{e}");
                                     self.display_error = true;
 
                                     return;
@@ -86,7 +86,7 @@ impl eframe::App for RtdbgGui {
                             let mut stream = match connect(self.pid) {
                                 Ok(stream) => stream,
                                 Err(e) => {
-                                    self.error = format!("{}", e);
+                                    self.error = format!("{e}");
                                     self.display_error = true;
 
                                     return;
@@ -96,7 +96,7 @@ impl eframe::App for RtdbgGui {
                             let res = send_packet(&mut stream, shutdown_packet);
 
                             if let Err(e) = res {
-                                self.error = format!("{}", e);
+                                self.error = format!("{e}");
                                 self.display_error = true;
 
                                 return;
@@ -170,7 +170,7 @@ impl eframe::App for RtdbgGui {
                             let res = run::run_script(self.pid, self.script.clone());
 
                             if let Err(e) = res {
-                                self.error = format!("{}", e);
+                                self.error = format!("{e}");
                                 self.display_error = true;
                             }
                         }

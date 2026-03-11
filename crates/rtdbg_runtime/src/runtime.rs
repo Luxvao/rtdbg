@@ -40,7 +40,7 @@ pub fn runtime() {
             let engine_result = engine.run_with_scope(&mut scope, script.get_contents());
 
             if let Err(e) = engine_result {
-                error!("Unable to execute script! Error: {:?}", e);
+                error!("Unable to execute script! Error: {e:?}");
             }
         }
     }

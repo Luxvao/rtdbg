@@ -26,7 +26,7 @@ pub fn report_error(stream: &mut UnixStream, e: Error) {
 
 pub fn report_write_error(error: Error) {
     // We only report it to the log. No reason to attempt recovery/resync or writing again
-    info!("Stream write error: {}", error);
+    info!("Stream write error: {error}");
 }
 
 // Generic function to send packets
