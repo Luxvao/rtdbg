@@ -4,13 +4,8 @@ mod run;
 use std::sync::mpsc::Receiver;
 
 use egui::{CentralPanel, Color32, ScrollArea, TextEdit, Vec2, Window};
-use librtdbg::{
-    api::{ReqApi, RespApi},
-    comms::send_packet,
-    packet::Packet,
-    runtime_connection::connect,
-};
-use preload::{CHILD, preload};
+use librtdbg::{api::ReqApi, comms::send_packet, packet::Packet, runtime_connection::connect};
+use preload::preload;
 use run::STREAM;
 
 fn main() -> eframe::Result {
@@ -40,10 +35,10 @@ struct RtdbgGui {
 impl eframe::App for RtdbgGui {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         // Read from the receiver
-        if let Some(receiver) = self.receiver.as_mut() {
-            if let Ok(output) = receiver.try_recv() {
-                self.output.push_str(&output);
-            }
+        if let Some(receiver) = self.receiver.as_mut()
+            && let Ok(output) = receiver.try_recv()
+        {
+            self.output.push_str(&output);
         }
 
         // Main window

@@ -1,6 +1,6 @@
 use std::{fs::File, io::Read, ops::Deref, path::PathBuf};
 
-use rhai::{CustomType, Dynamic, EvalAltResult, TypeBuilder};
+use rhai::{CustomType, Dynamic, TypeBuilder};
 
 use crate::error::Error;
 
@@ -56,7 +56,7 @@ impl Process {
     pub fn this() -> Result<Process, Error> {
         let pid = std::process::id();
 
-        let vmas = Vma::this()?;
+        let vmas = Vmas::this()?;
 
         Ok(Process { pid, vmas })
     }
@@ -75,24 +75,12 @@ impl Process {
 
     fn build_extra(builder: &mut TypeBuilder<Self>) {
         builder
-            .with_fn("get_process", || -> Result<Process, Box<EvalAltResult>> {
-                match Self::this() {
-                    Ok(proc) => return Ok(proc),
-                    Err(e) => return Err(format!("{e}").into()),
-                }
-            })
             .with_get("pid", Self::get_pid)
             .on_print(|process| format!("{:?}", process));
     }
 }
 
 impl Vma {
-    pub fn this() -> Result<Vmas, Error> {
-        let path = PathBuf::from("/proc/self/maps");
-
-        Vmas::try_from(path)
-    }
-
     fn get_saddy(&mut self) -> i64 {
         self.saddy as i64
     }
@@ -111,12 +99,6 @@ impl Vma {
 
     fn build_extra(builder: &mut TypeBuilder<Self>) {
         builder
-            .with_fn("get_vmas", || -> Result<Vmas, Box<EvalAltResult>> {
-                match Self::this() {
-                    Ok(vmas) => return Ok(vmas),
-                    Err(e) => return Err(format!("{e}").into()),
-                }
-            })
             .with_get("saddy", Self::get_saddy)
             .with_get("eaddy", Self::get_eaddy)
             .with_get("offset", Self::get_offset)
@@ -154,18 +136,7 @@ impl TryFrom<&str> for Vmas {
             let offset = parts.next().ok_or(Error::VmaError(value.to_string()))?;
             let device = parts.next().ok_or(Error::VmaError(value.to_string()))?;
             let inode = parts.next().ok_or(Error::VmaError(value.to_string()))?;
-            let path = parts.last();
-
-            let path = match path {
-                Some(path) => {
-                    if path.is_empty() {
-                        None
-                    } else {
-                        Some(path)
-                    }
-                }
-                None => None,
-            };
+            let path = parts.next_back().filter(|path| !path.is_empty());
 
             // Split the range into saddy and eaddy
             let mut range_parts = range.split('-');
@@ -231,6 +202,12 @@ impl IntoIterator for Vmas {
 }
 
 impl Vmas {
+    pub fn this() -> Result<Vmas, Error> {
+        let path = PathBuf::from("/proc/self/maps");
+
+        Vmas::try_from(path)
+    }
+
     fn build_extra(builder: &mut TypeBuilder<Self>) {
         builder.is_iterable().on_print(|vmas| format!("{:?}", vmas));
     }

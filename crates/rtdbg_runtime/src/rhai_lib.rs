@@ -4,10 +4,12 @@ use librtdbg::{
     proc_utils::{Permissions, Process, Vma, Vmas},
     register_const, register_fns, register_types,
 };
-use rhai::{Engine, Scope};
+use rhai::{Engine, EvalAltResult, Scope};
 
 pub fn setup_functions(engine: &mut Engine) {
     register_fns!(engine, {
+        "get_proc_info" => get_proc_info,
+        "get_vmas" => get_vmas,
         "read_mem" => read_mem,
         "write_mem" => write_mem_arr,
         "write_mem" => write_mem_string,
@@ -28,6 +30,16 @@ pub fn setup_constants(scope: &mut Scope) {
 
 pub fn setup_types(engine: &mut Engine) {
     register_types!(engine, { Permissions, Vma, Vmas, Process });
+}
+
+// Get process info
+fn get_proc_info() -> Result<Process, Box<EvalAltResult>> {
+    Process::this().map_err(|e| format!("{e}").into())
+}
+
+// Get maps info
+fn get_vmas() -> Result<Vmas, Box<EvalAltResult>> {
+    Vmas::this().map_err(|e| format!("{e}").into())
 }
 
 // Reading a specific amount of data from an address into an array
