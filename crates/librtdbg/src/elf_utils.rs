@@ -195,37 +195,37 @@ pub struct ElfHeader {
     pub class: Class,
     #[rhai_type(readonly)]
     pub data: Endianness,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub version: u8,
     #[rhai_type(readonly)]
     pub osabi: OsAbi,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub abiversion: u8,
     #[rhai_type(readonly)]
     pub e_type: Type,
     #[rhai_type(readonly)]
     pub machine: Machine,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub e_version: u32,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub entry: u64,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub phoff: u64,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub shoff: u64,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub flags: u32,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub ehsize: u16,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub phentsize: u16,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub phnum: u16,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub shentsize: u16,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub shnum: u16,
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub shstrndx: u16,
 }
 
@@ -416,73 +416,7 @@ impl ElfHeaderRaw64Bit {
 }
 
 impl ElfHeader {
-    fn get_version(&mut self) -> i64 {
-        self.version as i64
-    }
-
-    fn get_abiversion(&mut self) -> i64 {
-        self.abiversion as i64
-    }
-
-    fn get_e_version(&mut self) -> i64 {
-        self.e_version as i64
-    }
-
-    fn get_entry(&mut self) -> i64 {
-        self.entry as i64
-    }
-
-    fn get_phoff(&mut self) -> i64 {
-        self.phoff as i64
-    }
-
-    fn get_shoff(&mut self) -> i64 {
-        self.shoff as i64
-    }
-
-    fn get_flags(&mut self) -> i64 {
-        self.flags as i64
-    }
-
-    fn get_ehsize(&mut self) -> i64 {
-        self.ehsize as i64
-    }
-
-    fn get_phentsize(&mut self) -> i64 {
-        self.phentsize as i64
-    }
-
-    fn get_phnum(&mut self) -> i64 {
-        self.phnum as i64
-    }
-
-    fn get_shentsize(&mut self) -> i64 {
-        self.shentsize as i64
-    }
-
-    fn get_shnum(&mut self) -> i64 {
-        self.shnum as i64
-    }
-
-    fn get_shstrndx(&mut self) -> i64 {
-        self.shstrndx as i64
-    }
-
     fn build_extra(builder: &mut TypeBuilder<Self>) {
-        builder
-            .with_get("version", Self::get_version)
-            .with_get("abiversion", Self::get_abiversion)
-            .with_get("e_version", Self::get_e_version)
-            .with_get("entry", Self::get_entry)
-            .with_get("phoff", Self::get_phoff)
-            .with_get("shoff", Self::get_shoff)
-            .with_get("flags", Self::get_flags)
-            .with_get("ehsize", Self::get_ehsize)
-            .with_get("phentsize", Self::get_phentsize)
-            .with_get("phnum", Self::get_phnum)
-            .with_get("shentsize", Self::get_shentsize)
-            .with_get("shnum", Self::get_shnum)
-            .with_get("shstrndx", Self::get_shstrndx)
-            .on_print(|header| format!("{header:?}"));
+        builder.on_print(|header| format!("{header:?}"));
     }
 }

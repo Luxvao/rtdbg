@@ -7,7 +7,7 @@ use crate::error::Error;
 #[derive(Debug, Clone, Default, CustomType)]
 #[rhai_type(extra = Self::build_extra)]
 pub struct Process {
-    #[rhai_type(skip)]
+    #[rhai_type(readonly)]
     pub pid: u32,
     #[rhai_type(readonly)]
     pub vmas: Vmas,
@@ -79,32 +79,26 @@ impl Process {
         Ok(Process { pid, vmas, path })
     }
 
-    fn get_pid(&mut self) -> i64 {
-        i64::from(self.pid)
-    }
-
     fn build_extra(builder: &mut TypeBuilder<Self>) {
-        builder
-            .with_get("pid", Self::get_pid)
-            .on_print(|process| format!("{process:?}"));
+        builder.on_print(|process| format!("{process:?}"));
     }
 }
 
 impl Vma {
-    fn get_saddy(&mut self) -> i64 {
-        self.saddy as i64
+    fn get_saddy(&mut self) -> u64 {
+        self.saddy as u64
     }
 
-    fn get_eaddy(&mut self) -> i64 {
-        self.eaddy as i64
+    fn get_eaddy(&mut self) -> u64 {
+        self.eaddy as u64
     }
 
-    fn get_offset(&mut self) -> i64 {
-        self.offset as i64
+    fn get_offset(&mut self) -> u64 {
+        self.offset as u64
     }
 
-    fn get_inode(&mut self) -> i64 {
-        self.inode as i64
+    fn get_inode(&mut self) -> u64 {
+        self.inode as u64
     }
 
     fn build_extra(builder: &mut TypeBuilder<Self>) {
