@@ -11,6 +11,8 @@ pub struct Process {
     pub pid: u32,
     #[rhai_type(readonly)]
     pub vmas: Vmas,
+    #[rhai_type(readonly)]
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Default, CustomType)]
@@ -58,7 +60,11 @@ impl Process {
 
         let vmas = Vmas::this()?;
 
-        Ok(Process { pid, vmas })
+        let path = std::fs::canonicalize("/proc/self/exe")?
+            .to_string_lossy()
+            .to_string();
+
+        Ok(Process { pid, vmas, path })
     }
 
     pub fn from_pid(pid: u32) -> Result<Process, Error> {
@@ -66,7 +72,11 @@ impl Process {
 
         let vmas = Vmas::try_from(maps_file)?;
 
-        Ok(Process { pid, vmas })
+        let path = std::fs::canonicalize(format!("/proc/{pid}/exe"))?
+            .to_string_lossy()
+            .to_string();
+
+        Ok(Process { pid, vmas, path })
     }
 
     fn get_pid(&mut self) -> i64 {

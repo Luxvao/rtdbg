@@ -1,6 +1,7 @@
 use std::os::raw::c_void;
 
 use librtdbg::{
+    elf_utils::{ElfHeader, ElfHeaderRaw32Bit, ElfHeaderRaw64Bit},
     proc_utils::{Permissions, Process, Vma, Vmas},
     register_const, register_fns, register_types,
 };
@@ -9,6 +10,7 @@ use rhai::{Engine, EvalAltResult, Scope};
 pub fn setup_functions(engine: &mut Engine) {
     register_fns!(engine, {
         "get_proc_info" => get_proc_info,
+        "get_elf_header" => get_elf_header,
         "get_vmas" => get_vmas,
         "read_mem" => read_mem,
         "write_mem" => write_mem_arr,
@@ -29,7 +31,7 @@ pub fn setup_constants(scope: &mut Scope) {
 }
 
 pub fn setup_types(engine: &mut Engine) {
-    register_types!(engine, { Permissions, Vma, Vmas, Process });
+    register_types!(engine, { Permissions, Vma, Vmas, Process, ElfHeader });
 }
 
 // Get process info
@@ -40,6 +42,31 @@ fn get_proc_info() -> Result<Process, Box<EvalAltResult>> {
 // Get maps info
 fn get_vmas() -> Result<Vmas, Box<EvalAltResult>> {
     Vmas::this().map_err(|e| format!("{e}").into())
+}
+
+// Get ELF header
+fn get_elf_header() -> Result<ElfHeader, Box<EvalAltResult>> {
+    let proc_info = get_proc_info()?;
+
+    let header_address = proc_info
+        .vmas
+        .iter()
+        .filter(|vma| vma.path.eq(&Some(proc_info.path.clone())) && vma.offset == 0)
+        .nth(0)
+        .ok_or("Unable to find ELF header")?
+        .saddy;
+
+    unsafe {
+        let elf_header_32 = *(header_address as *const ElfHeaderRaw32Bit);
+
+        if elf_header_32.class == 2 {
+            let elf_header_64 = *(header_address as *const ElfHeaderRaw64Bit);
+
+            return ElfHeader::try_from(elf_header_64).map_err(|e| format!("{e}").into());
+        }
+
+        ElfHeader::try_from(elf_header_32).map_err(|e| format!("{e}").into())
+    }
 }
 
 // Reading a specific amount of data from an address into an array

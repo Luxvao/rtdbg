@@ -22,4 +22,6 @@ pub enum Error {
     VmaError(String),
     #[error("Mutex poisoned")]
     MutexPoisoned,
+    #[error("Failed to parse provided ELF header")]
+    ElfHeaderParsingError,
 }

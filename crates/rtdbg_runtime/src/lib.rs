@@ -1,4 +1,4 @@
-mod rhai_lib;
+pub mod rhai_lib;
 mod runtime;
 mod sock;
 

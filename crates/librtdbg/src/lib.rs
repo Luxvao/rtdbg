@@ -1,5 +1,6 @@
 pub mod api;
 pub mod comms;
+pub mod elf_utils;
 pub mod error;
 pub mod packet;
 pub mod proc_utils;

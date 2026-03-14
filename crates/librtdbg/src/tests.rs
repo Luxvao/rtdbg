@@ -1,8 +1,8 @@
-use crate::proc_utils::Vma;
+use crate::proc_utils::Vmas;
 
 #[test]
 fn test_vmas() {
-    let vmas = Vma::this().unwrap();
+    let vmas = Vmas::this().unwrap();
 
     println!("{:?}", vmas);
 }
