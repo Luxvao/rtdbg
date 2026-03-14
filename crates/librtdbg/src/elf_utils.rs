@@ -345,11 +345,17 @@ impl TryFrom<ElfHeaderRaw64Bit> for ElfHeader {
 
 impl ElfHeaderRaw32Bit {
     pub fn correct_for_endianness(mut self) -> Result<ElfHeaderRaw32Bit, Error> {
-        #[cfg(target_endian = "little")]
-        let target_endianness = Endianness::Little;
+        let target_endianness = {
+            #[cfg(target_endian = "little")]
+            {
+                Endianness::Little
+            }
 
-        #[cfg(target_endian = "big")]
-        let target_endianness = Endianness::Big;
+            #[cfg(target_endian = "big")]
+            {
+                Endianness::Big
+            }
+        };
 
         if target_endianness == Endianness::try_from(self.data)? {
             return Ok(self);
