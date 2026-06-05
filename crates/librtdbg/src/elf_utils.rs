@@ -2,6 +2,18 @@ use rhai::{CustomType, TypeBuilder};
 
 use crate::error::Error;
 
+const LOCAL_ENDIANNESS: Endianness = {
+    #[cfg(target_endian = "little")]
+    {
+        Endianness::Little
+    }
+
+    #[cfg(target_endian = "big")]
+    {
+        Endianness::Big
+    }
+};
+
 macro_rules! gen_enum_match {
     ($value:expr, $type:ty, $base:ident, { $( $case:ident ),+ }) => {
         'found: {
@@ -65,6 +77,32 @@ pub struct ElfHeaderRaw64Bit {
     pub shstrndx: u16,
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
+pub struct ProgramHeaderRaw32Bit {
+    pub p_type: u32,
+    pub offset: u32,
+    pub vaddr: u32,
+    pub paddr: u32,
+    pub filesz: u32,
+    pub memsz: u32,
+    pub flags: u32,
+    pub align: u32,
+}
+
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
+pub struct ProgramHeaderRaw64Bit {
+    pub p_type: u32,
+    pub flags: u32,
+    pub offset: u64,
+    pub vaddr: u64,
+    pub paddr: u64,
+    pub filesz: u64,
+    pub memsz: u64,
+    pub align: u64,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Class {
     Bits32,
@@ -100,7 +138,7 @@ pub enum OsAbi {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Type {
+pub enum ElfType {
     EtNone = 0x00,
     EtRel = 0x01,
     EtExec = 0x02,
@@ -188,6 +226,25 @@ pub enum Machine {
     LoongArch = 0x102,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum ProgramType {
+    PtNull = 0x0,
+    PtLoad = 0x1,
+    PtDynamic = 0x2,
+    PtInterp = 0x3,
+    PtNote = 0x4,
+    PtShlib = 0x5,
+    PtPhdr = 0x6,
+    PtTls = 0x7,
+    PtLoos = 0x60000000,
+    PtHios = 0x6FFFFFFF,
+    PtLoproc = 0x70000000,
+    PtHiproc = 0x7FFFFFFF,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ProgramFlags(u32);
+
 #[derive(Clone, Debug, CustomType)]
 #[rhai_type(extra = Self::build_extra)]
 pub struct ElfHeader {
@@ -202,7 +259,7 @@ pub struct ElfHeader {
     #[rhai_type(readonly)]
     pub abiversion: u8,
     #[rhai_type(readonly)]
-    pub e_type: Type,
+    pub e_type: ElfType,
     #[rhai_type(readonly)]
     pub machine: Machine,
     #[rhai_type(readonly)]
@@ -227,6 +284,27 @@ pub struct ElfHeader {
     pub shnum: u16,
     #[rhai_type(readonly)]
     pub shstrndx: u16,
+}
+
+#[derive(Clone, Debug, CustomType)]
+#[rhai_type(extra = Self::build_extra)]
+pub struct ProgramHeader {
+    #[rhai_type(readonly)]
+    pub p_type: ProgramType,
+    #[rhai_type(readonly)]
+    pub flags: ProgramFlags,
+    #[rhai_type(readonly)]
+    pub offset: u64,
+    #[rhai_type(readonly)]
+    pub vaddr: u64,
+    #[rhai_type(readonly)]
+    pub paddr: u64,
+    #[rhai_type(readonly)]
+    pub filesz: u64,
+    #[rhai_type(readonly)]
+    pub memsz: u64,
+    #[rhai_type(readonly)]
+    pub align: u64,
 }
 
 impl TryFrom<u8> for Class {
@@ -261,11 +339,11 @@ impl TryFrom<u8> for OsAbi {
     }
 }
 
-impl TryFrom<u16> for Type {
+impl TryFrom<u16> for ElfType {
     type Error = crate::error::Error;
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
-        gen_enum_match!(value, u16, Type, {EtNone, EtRel, EtExec, EtDyn, EtCore, EtLoos, EtHios, EtLoproc, EtHiproc}).ok_or(Error::ElfHeaderParsingError)
+        gen_enum_match!(value, u16, ElfType, {EtNone, EtRel, EtExec, EtDyn, EtCore, EtLoos, EtHios, EtLoproc, EtHiproc}).ok_or(Error::ElfHeaderParsingError)
     }
 }
 
@@ -274,6 +352,20 @@ impl TryFrom<u16> for Machine {
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
         gen_enum_match!(value, u16, Machine, {None, AtNtWe32100, Sparc, X86, Motorola68k, Motorola88k, IntelMcu, Intel80860, Mips, IbmSystem370, MipsRs3000LE, HpPaRisc, Intel80960, PowerPc, PowerPc64, S390x, IbmSpc, NecV800, FujistuFr20, TrwRh32, MotorolaRce, AArch32, DigitalAlpha, SuperH, SparcV9, SiemensTriCoreEP, ArgonautRiscCore, Hitachi300, Hitachi300H, HitachiH8S, Hitachi500, Ia64, StanfordMipsX, MotorolaColdFire, MotorolaM68HC12, FujitsuMmaMultimediaAccelerator, SiemensPcp, SonyNCpuERiscP, DensoNdr1Mcp, MotorolaStarCoreP, ToyotaMe16P, STMicroelectronicsSt100P, TinyJ, X86_64, SonyDspP, DigitalEquipmentCorpPdp10, DigitalEquipmentCorpPdp11, SiemensFx66Mcu, STMicroelectronicsSt9, StMicroelectronicsSt7, MotorolaMC68HC16Mcu, MotorolaMC68HC11Mcu, MotorolaMC68HC08, MotorolaMC68HC05Mcu, SiliconGraphicsSvX, STMicroelectronicsSt19, DigitalVax, AxisCommuncationsMcp, InfineonTechnologiesMcp, Element14DspP, LsiLogicDspP, TMS320C6000, McstElbrusE2K, AArch64, ZilogZ80, RiscV, BerkeleyPacketFilter, Wdc65C816, LoongArch}).ok_or(Error::ElfHeaderParsingError)
+    }
+}
+
+impl TryFrom<u32> for ProgramType {
+    type Error = crate::error::Error;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        gen_enum_match!(value, u32, ProgramType, {PtNull, PtLoad, PtDynamic, PtInterp, PtNote, PtShlib, PtPhdr, PtTls, PtLoos, PtHios, PtLoproc, PtHiproc}).ok_or(Error::ProgramHeaderParsingError)
+    }
+}
+
+impl From<u32> for ProgramFlags {
+    fn from(value: u32) -> Self {
+        ProgramFlags(value)
     }
 }
 
@@ -293,7 +385,7 @@ impl TryFrom<ElfHeaderRaw32Bit> for ElfHeader {
             version: value.version,
             osabi: OsAbi::try_from(value.osabi)?,
             abiversion: value.abiversion,
-            e_type: Type::try_from(value.e_type)?,
+            e_type: ElfType::try_from(value.e_type)?,
             machine: Machine::try_from(value.machine)?,
             e_version: value.e_version,
             entry: value.entry as u64,
@@ -326,7 +418,7 @@ impl TryFrom<ElfHeaderRaw64Bit> for ElfHeader {
             version: value.version,
             osabi: OsAbi::try_from(value.osabi)?,
             abiversion: value.abiversion,
-            e_type: Type::try_from(value.e_type)?,
+            e_type: ElfType::try_from(value.e_type)?,
             machine: Machine::try_from(value.machine)?,
             e_version: value.e_version,
             entry: value.entry,
@@ -343,21 +435,17 @@ impl TryFrom<ElfHeaderRaw64Bit> for ElfHeader {
     }
 }
 
+impl TryFrom<ProgramHeaderRaw32Bit> for ProgramHeader {
+    type Error = crate::error::Error;
+
+    fn try_from(value: ProgramHeaderRaw32Bit) -> Result<Self, Self::Error> {
+        value = value.correct_for_endianness(endianness)
+    }
+}
+
 impl ElfHeaderRaw32Bit {
     pub fn correct_for_endianness(mut self) -> Result<ElfHeaderRaw32Bit, Error> {
-        let target_endianness = {
-            #[cfg(target_endian = "little")]
-            {
-                Endianness::Little
-            }
-
-            #[cfg(target_endian = "big")]
-            {
-                Endianness::Big
-            }
-        };
-
-        if target_endianness == Endianness::try_from(self.data)? {
+        if LOCAL_ENDIANNESS == Endianness::try_from(self.data)? {
             return Ok(self);
         }
 
@@ -381,19 +469,7 @@ impl ElfHeaderRaw32Bit {
 
 impl ElfHeaderRaw64Bit {
     pub fn correct_for_endianness(mut self) -> Result<ElfHeaderRaw64Bit, Error> {
-        let target_endianness = {
-            #[cfg(target_endian = "little")]
-            {
-                Endianness::Little
-            }
-
-            #[cfg(target_endian = "big")]
-            {
-                Endianness::Big
-            }
-        };
-
-        if target_endianness == Endianness::try_from(self.data)? {
+        if LOCAL_ENDIANNESS == Endianness::try_from(self.data)? {
             return Ok(self);
         }
 
@@ -415,7 +491,73 @@ impl ElfHeaderRaw64Bit {
     }
 }
 
+impl ProgramHeaderRaw32Bit {
+    pub fn correct_for_endianness(
+        mut self,
+        endianness: Endianness,
+    ) -> Result<ProgramHeaderRaw32Bit, Error> {
+        if LOCAL_ENDIANNESS == endianness {
+            return Ok(self);
+        }
+
+        self.p_type = self.p_type.swap_bytes();
+        self.offset = self.offset.swap_bytes();
+        self.vaddr = self.vaddr.swap_bytes();
+        self.paddr = self.paddr.swap_bytes();
+        self.filesz = self.filesz.swap_bytes();
+        self.memsz = self.memsz.swap_bytes();
+        self.flags = self.flags.swap_bytes();
+        self.align = self.align.swap_bytes();
+
+        Ok(self)
+    }
+}
+
+impl ProgramHeaderRaw64Bit {
+    pub fn correct_for_endianness(
+        mut self,
+        endianness: Endianness,
+    ) -> Result<ProgramHeaderRaw64Bit, Error> {
+        if LOCAL_ENDIANNESS == endianness {
+            return Ok(self);
+        }
+
+        self.p_type = self.p_type.swap_bytes();
+        self.offset = self.offset.swap_bytes();
+        self.vaddr = self.vaddr.swap_bytes();
+        self.paddr = self.paddr.swap_bytes();
+        self.filesz = self.filesz.swap_bytes();
+        self.memsz = self.memsz.swap_bytes();
+        self.flags = self.flags.swap_bytes();
+        self.align = self.align.swap_bytes();
+
+        Ok(self)
+    }
+}
+
+impl ProgramFlags {
+    pub const X: u32 = 0x1;
+    pub const W: u32 = 0x2;
+    pub const R: u32 = 0x4;
+
+    pub fn is_executable(&self) -> bool {
+        self.0 & Self::X != 0
+    }
+    pub fn is_writable(&self) -> bool {
+        self.0 & Self::W != 0
+    }
+    pub fn is_readable(&self) -> bool {
+        self.0 & Self::R != 0
+    }
+}
+
 impl ElfHeader {
+    fn build_extra(builder: &mut TypeBuilder<Self>) {
+        builder.on_print(|header| format!("{header:?}"));
+    }
+}
+
+impl ProgramHeader {
     fn build_extra(builder: &mut TypeBuilder<Self>) {
         builder.on_print(|header| format!("{header:?}"));
     }

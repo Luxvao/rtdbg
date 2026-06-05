@@ -24,4 +24,6 @@ pub enum Error {
     MutexPoisoned,
     #[error("Failed to parse provided ELF header")]
     ElfHeaderParsingError,
+    #[error("Failed to parse provided program header")]
+    ProgramHeaderParsingError,
 }
