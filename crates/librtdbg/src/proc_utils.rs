@@ -19,17 +19,17 @@ pub struct Process {
 #[rhai_type(extra = Self::build_extra)]
 pub struct Vma {
     #[rhai_type(skip)]
-    pub saddy: usize,
+    pub saddy: u64,
     #[rhai_type(skip)]
-    pub eaddy: usize,
+    pub eaddy: u64,
     #[rhai_type(readonly)]
     pub permissions: Permissions,
     #[rhai_type(skip)]
-    pub offset: usize,
+    pub offset: u64,
     #[rhai_type(readonly)]
     pub device: String,
     #[rhai_type(skip)]
-    pub inode: usize,
+    pub inode: u64,
     #[rhai_type(readonly)]
     pub path: Option<String>,
 }
@@ -152,17 +152,17 @@ impl TryFrom<&str> for Vmas {
                 .next()
                 .ok_or(Error::VmaError(value.to_string()))?;
 
-            let saddy = usize::from_str_radix(saddy_str, 16)?;
-            let eaddy = usize::from_str_radix(eaddy_str, 16)?;
+            let saddy = u64::from_str_radix(saddy_str, 16)?;
+            let eaddy = u64::from_str_radix(eaddy_str, 16)?;
 
             // Parse permissions
             let permissions = Permissions::try_from(permissions)?;
 
             // Parse offset
-            let offset = usize::from_str_radix(offset, 16)?;
+            let offset = u64::from_str_radix(offset, 16)?;
 
             // Parse inode
-            let inode = inode.parse::<usize>()?;
+            let inode = inode.parse::<u64>()?;
 
             vmas.push(Vma {
                 saddy,
