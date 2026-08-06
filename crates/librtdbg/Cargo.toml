@@ -9,5 +9,6 @@ include_runtime = []
 
 [dependencies]
 log = "0.4.27"
+paste = "1.0.15"
 rhai = "1.22.2"
 thiserror = "2.0.18"

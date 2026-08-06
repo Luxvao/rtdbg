@@ -19,6 +19,8 @@ pub fn runtime() {
 
     rhai_lib::setup_types(&mut engine);
 
+    rhai_lib::setup_enums(&mut engine);
+
     let (queue, condvar) = &SCRIPT_QUEUE;
 
     let Ok(mut queue) = queue.lock() else {

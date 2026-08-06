@@ -1,11 +1,17 @@
 use std::os::raw::c_void;
 
+use paste::paste;
+
 use librtdbg::{
-    elf_utils::{ElfHeader, ElfHeaderRaw32Bit, ElfHeaderRaw64Bit},
+    elf_utils::{
+        Class, ElfHeader, ElfHeaderRaw32Bit, ElfHeaderRaw64Bit, ElfType, Endianness, Machine,
+        OsAbi, ProgramType, class_module, elftype_module, endianness_module, machine_module,
+        osabi_module, programtype_module,
+    },
     proc_utils::{Permissions, Process, Vma, Vmas},
-    register_const, register_fns, register_types,
+    register_const, register_enums, register_fns, register_types,
 };
-use rhai::{Engine, EvalAltResult, Scope};
+use rhai::{Engine, EvalAltResult, Scope, exported_module};
 
 pub fn setup_functions(engine: &mut Engine) {
     register_fns!(engine, {
@@ -32,6 +38,10 @@ pub fn setup_constants(scope: &mut Scope) {
 
 pub fn setup_types(engine: &mut Engine) {
     register_types!(engine, { Permissions, Vma, Vmas, Process, ElfHeader });
+}
+
+pub fn setup_enums(engine: &mut Engine) {
+    register_enums!(engine, { Class, Endianness, OsAbi, ElfType, Machine, ProgramType });
 }
 
 // Get process info

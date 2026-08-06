@@ -3,18 +3,18 @@ set positional-arguments
 alias b := build
 
 # Build everything
-build: runtime launcher gui
+build: launcher gui
 
 # Build runtime
 runtime:
     cargo build --release -p rtdbg_runtime
 
 # Build the launcher
-launcher:
+launcher: runtime
     cargo build --release -p rtdbg
 
 # Build the GUI component
-gui:
+gui: runtime
     cargo build --release -p rtdbg_gui
 
 # Run the main binary, passing the parameters

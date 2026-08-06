@@ -1,6 +1,8 @@
-use rhai::{CustomType, TypeBuilder};
+use paste::paste;
 
-use crate::error::Error;
+use rhai::{CustomType, Module, TypeBuilder, export_module};
+
+use crate::{create_enum_module, error::Error};
 
 const LOCAL_ENDIANNESS: Endianness = {
     #[cfg(target_endian = "little")]
@@ -109,11 +111,15 @@ pub enum Class {
     Bits64,
 }
 
+create_enum_module!(Class => Bits32, Bits64);
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Endianness {
     Little,
     Big,
 }
+
+create_enum_module!(Endianness => Little, Big);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum OsAbi {
@@ -137,6 +143,8 @@ pub enum OsAbi {
     StratusTechnologiesOpenVOS = 0x12,
 }
 
+create_enum_module!(OsAbi => SystemV, HpUx, NetBSD, Linux, GNUHurd, Solaris, AIX, IRIX, FreeBSD, Tru64, NovellModesto, OpenBSD, OpenVMS, NonStopKernel, AROS, FenixOS, NuxiCloudABI, StratusTechnologiesOpenVOS);
+
 #[derive(Clone, Copy, Debug)]
 pub enum ElfType {
     EtNone = 0x00,
@@ -151,6 +159,8 @@ pub enum ElfType {
     EtLoproc = 0xFF00,
     EtHiproc = 0xFFFF,
 }
+
+create_enum_module!(ElfType => EtNone, EtRel, EtExec, EtDyn, EtCore, EtLoos, EtHios, EtLoproc, EtHiproc);
 
 // Completely unnecessary by the way. I just had time
 #[derive(Clone, Copy, Debug)]
@@ -226,6 +236,8 @@ pub enum Machine {
     LoongArch = 0x102,
 }
 
+create_enum_module!(Machine => None, AtNtWe32100, Sparc, X86, Motorola68k, Motorola88k, IntelMcu, Intel80860, Mips, IbmSystem370, MipsRs3000LE, HpPaRisc, Intel80960, PowerPc, PowerPc64, S390x, IbmSpc, NecV800, FujistuFr20, TrwRh32, MotorolaRce, AArch32, DigitalAlpha, SuperH, SparcV9, SiemensTriCoreEP, ArgonautRiscCore, Hitachi300, Hitachi300H, HitachiH8S, Hitachi500, Ia64, StanfordMipsX, MotorolaColdFire, MotorolaM68HC12, FujitsuMmaMultimediaAccelerator, SiemensPcp, SonyNCpuERiscP, DensoNdr1Mcp, MotorolaStarCoreP, ToyotaMe16P, STMicroelectronicsSt100P, TinyJ, X86_64, SonyDspP, DigitalEquipmentCorpPdp10, DigitalEquipmentCorpPdp11, SiemensFx66Mcu, STMicroelectronicsSt9, StMicroelectronicsSt7, MotorolaMC68HC16Mcu, MotorolaMC68HC11Mcu, MotorolaMC68HC08, MotorolaMC68HC05Mcu, SiliconGraphicsSvX, STMicroelectronicsSt19, DigitalVax, AxisCommuncationsMcp, InfineonTechnologiesMcp, Element14DspP, LsiLogicDspP, TMS320C6000, McstElbrusE2K, AArch64, ZilogZ80, RiscV, BerkeleyPacketFilter, Wdc65C816, LoongArch);
+
 #[derive(Clone, Copy, Debug)]
 pub enum ProgramType {
     PtNull = 0x0,
@@ -241,6 +253,8 @@ pub enum ProgramType {
     PtLoproc = 0x70000000,
     PtHiproc = 0x7FFFFFFF,
 }
+
+create_enum_module!(ProgramType => PtNull, PtLoad, PtDynamic, PtInterp, PtNote, PtShlib, PtPhdr, PtTls, PtLoos, PtHios, PtLoproc, PtHiproc);
 
 #[derive(Clone, Copy, Debug)]
 pub struct ProgramFlags(u32);
@@ -435,14 +449,6 @@ impl TryFrom<ElfHeaderRaw64Bit> for ElfHeader {
     }
 }
 
-impl TryFrom<ProgramHeaderRaw32Bit> for ProgramHeader {
-    type Error = crate::error::Error;
-
-    fn try_from(value: ProgramHeaderRaw32Bit) -> Result<Self, Self::Error> {
-        value = value.correct_for_endianness(endianness)
-    }
-}
-
 impl ElfHeaderRaw32Bit {
     pub fn correct_for_endianness(mut self) -> Result<ElfHeaderRaw32Bit, Error> {
         if LOCAL_ENDIANNESS == Endianness::try_from(self.data)? {
@@ -492,12 +498,9 @@ impl ElfHeaderRaw64Bit {
 }
 
 impl ProgramHeaderRaw32Bit {
-    pub fn correct_for_endianness(
-        mut self,
-        endianness: Endianness,
-    ) -> Result<ProgramHeaderRaw32Bit, Error> {
+    pub fn correct_for_endianness(mut self, endianness: Endianness) -> ProgramHeaderRaw32Bit {
         if LOCAL_ENDIANNESS == endianness {
-            return Ok(self);
+            return self;
         }
 
         self.p_type = self.p_type.swap_bytes();
@@ -509,17 +512,14 @@ impl ProgramHeaderRaw32Bit {
         self.flags = self.flags.swap_bytes();
         self.align = self.align.swap_bytes();
 
-        Ok(self)
+        self
     }
 }
 
 impl ProgramHeaderRaw64Bit {
-    pub fn correct_for_endianness(
-        mut self,
-        endianness: Endianness,
-    ) -> Result<ProgramHeaderRaw64Bit, Error> {
+    pub fn correct_for_endianness(mut self, endianness: Endianness) -> ProgramHeaderRaw64Bit {
         if LOCAL_ENDIANNESS == endianness {
-            return Ok(self);
+            return self;
         }
 
         self.p_type = self.p_type.swap_bytes();
@@ -531,7 +531,7 @@ impl ProgramHeaderRaw64Bit {
         self.flags = self.flags.swap_bytes();
         self.align = self.align.swap_bytes();
 
-        Ok(self)
+        self
     }
 }
 
@@ -560,5 +560,30 @@ impl ElfHeader {
 impl ProgramHeader {
     fn build_extra(builder: &mut TypeBuilder<Self>) {
         builder.on_print(|header| format!("{header:?}"));
+    }
+
+    fn try_from(
+        mut value: ProgramHeaderRaw32Bit,
+        endianness: Endianness,
+    ) -> Result<ProgramHeader, Error> {
+        value = value.correct_for_endianness(endianness);
+
+        Ok(ProgramHeader {
+            p_type: ProgramType::try_from(value.p_type)?,
+            flags: ProgramFlags::from(value.flags),
+            offset: value.offset as u64,
+            vaddr: value.vaddr as u64,
+            paddr: value.paddr as u64,
+            filesz: value.filesz as u64,
+            memsz: value.memsz as u64,
+            align: value.align as u64,
+        })
+    }
+
+    fn try_from(
+        mut value: ProgramHeaderRaw64Bit,
+        endianness: Endianness,
+    ) -> Result<ProgramHeader, Error> {
+        value = value.correct_for_endianness(endianness);
     }
 }

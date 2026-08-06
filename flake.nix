@@ -1,5 +1,5 @@
 {
-  description = "A flake for mmux";
+  description = "A flake for rtdbg";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
@@ -20,15 +20,16 @@
         buildInputs = [
           pkg-config
           eza
-          rust-bin.stable.latest.default
+          rust-bin.nightly.latest.default
           rust-analyzer
           wayland
           libxkbcommon
+          libGL
           just
         ];
 
         shellHook = ''
-          export LD_LIBRARY_PATH=${pkgs.wayland}/lib:${pkgs.libxkbcommon}/lib:/run/opengl-driver/lib:$LD_LIBRARY_PATH
+          export LD_LIBRARY_PATH="${pkgs.libGL}/lib:${pkgs.wayland}/lib:${pkgs.libxkbcommon}/lib:/run/opengl-driver/lib:$LD_LIBRARY_PATH"
 
           zsh
           exit
