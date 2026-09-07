@@ -10,9 +10,6 @@ use std::{
 use ctor::ctor;
 use librtdbg::script::Script;
 
-pub static SCRIPT_QUEUE: (Mutex<VecDeque<Script>>, Condvar) =
-    (Mutex::new(VecDeque::new()), Condvar::new());
-
 #[ctor]
 fn init() {
     std::thread::spawn(sock::io);

@@ -4,14 +4,8 @@ use std::{
     sync::LazyLock,
 };
 
-use librtdbg::{
-    api::{ReqApi, RespApi},
-    comms::{report_error, report_write_error, send_packet},
-    packet::Packet,
-};
+use librtdbg::api::{Request, Response};
 use log::{error, info};
-
-use crate::SCRIPT_QUEUE;
 
 pub static SOCKET_PATH: LazyLock<String> = LazyLock::new(setup_sock);
 
@@ -41,92 +35,33 @@ pub fn io() {
 
 fn handle_client(mut stream: UnixStream) {
     loop {
-        // Read packet from stream
-        let packet = match Packet::read_from_stream(&mut stream) {
-            Ok(packet) => packet,
+        let mut buf = [0u8; 256];
+
+        let request: Request = match postcard::from_io((&mut stream, &mut buf)) {
+            Ok((r, (_, _))) => r,
             Err(e) => {
-                report_error(&mut stream, e);
-                return;
+                let resp = Response::Error(e.to_string());
+
+                report(&mut stream, resp);
+
+                continue;
             }
         };
 
-        // Parse it into a request
-        let req = match ReqApi::try_from(packet) {
-            Ok(req) => req,
-            Err(e) => {
-                report_error(&mut stream, e);
-                return;
+        let resp = match request {
+            Request::LoadScript { script } => {
+                todo!()
             }
+            Request::UnloadScript { script_id } => todo!(),
+            Request::Status => todo!(),
         };
 
-        match req {
-            ReqApi::Disconnect => {
-                return;
-            }
-            ReqApi::Shutdown => {
-                clean_sock();
-                exit(0);
-            }
-            ReqApi::AddToQueue { script } => {
-                let (mut queue_locked, condvar) = extract_queue();
-
-                // Push script onto the queue
-                queue_locked.push_front(script);
-
-                // Notify runtime
-                condvar.notify_one();
-            }
-            ReqApi::RemoveFromQueue { index } => {
-                let (mut queue_locked, _) = extract_queue();
-
-                // Remove the script from the queue
-                let result = queue_locked.remove(index);
-
-                if result.is_none() {
-                    info!("Bad request. No such script");
-
-                    let resp = RespApi::Failure(String::from("No such script"));
-
-                    let resp_packet = Packet::from(resp);
-
-                    let write_result = send_packet(&mut stream, resp_packet);
-
-                    if let Err(e) = write_result {
-                        // If writing failed then it's likely we won't be able to recover, so we quit the connection
-                        report_write_error(e);
-
-                        return;
-                    }
-
-                    continue;
-                }
-            }
-        }
-
-        // If we're here then everything went smoothly and we can report that back
-        let write_res = send_packet(&mut stream, Packet::from(RespApi::Success));
-
-        if let Err(e) = write_res {
-            report_write_error(e);
-
-            return;
-        }
+        report(&mut stream, resp);
     }
 }
 
-fn extract_queue() -> (
-    std::sync::MutexGuard<'static, std::collections::VecDeque<librtdbg::script::Script>>,
-    &'static std::sync::Condvar,
-) {
-    let (queue, condvar) = &SCRIPT_QUEUE;
-
-    let queue_locked = match queue.lock() {
-        Ok(queue) => queue,
-        Err(e) => {
-            error!("Unable to lock queue, poisoned! Error: {e:?}. Exiting...");
-
-            exit(1);
-        }
-    };
-    (queue_locked, condvar)
+fn report(stream: &mut UnixStream, resp: Response) {
+    if let Err(e) = postcard::to_io(&resp, stream) {
+        info!("{e}");
+    }
 }

@@ -1,12 +1,15 @@
 pub mod api;
-pub mod comms;
 pub mod elf_utils;
 pub mod error;
-pub mod packet;
+pub mod hook;
+pub mod memory;
+pub mod parameter;
 pub mod proc_utils;
+pub mod register;
 pub mod rhai_utils;
 pub mod runtime_connection;
 pub mod runtime_extract;
 pub mod script;
 #[cfg(test)]
 mod tests;
+pub mod utils;

@@ -579,11 +579,4 @@ impl ProgramHeader {
             align: value.align as u64,
         })
     }
-
-    fn try_from(
-        mut value: ProgramHeaderRaw64Bit,
-        endianness: Endianness,
-    ) -> Result<ProgramHeader, Error> {
-        value = value.correct_for_endianness(endianness);
-    }
 }

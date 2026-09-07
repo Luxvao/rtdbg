@@ -1,9 +1,21 @@
-use std::process::exit;
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock, Mutex},
+};
 
-use log::{error, info};
-use rhai::{Engine, Scope};
+use librtdbg::{
+    error::Error,
+    script::{Script, ScriptContext, ScriptId, Store},
+};
+use log::info;
+use rhai::{Engine, FuncArgs, Scope, packages::Package};
 
-use crate::{SCRIPT_QUEUE, rhai_lib};
+use crate::rhai_lib::RTDBG_PACKAGE;
+
+pub static GLOBAL_STORE: LazyLock<Store> = LazyLock::new(|| Store::new());
+
+pub static SCRIPT_STORAGE: Mutex<LazyLock<HashMap<ScriptId, ScriptContext>>> =
+    Mutex::new(LazyLock::new(|| HashMap::new()));
 
 pub fn runtime() {
     // Set up the logger
@@ -12,38 +24,47 @@ pub fn runtime() {
     // Display the PID of this process
     info!("PID: {}", std::process::id());
 
-    // Set up the Rhai engine
-    let mut engine = Engine::new();
+    loop {}
+}
 
-    rhai_lib::setup_functions(&mut engine);
-
-    rhai_lib::setup_types(&mut engine);
-
-    rhai_lib::setup_enums(&mut engine);
-
-    let (queue, condvar) = &SCRIPT_QUEUE;
-
-    let Ok(mut queue) = queue.lock() else {
-        error!("Unable to lock the queue! Exiting!");
-
-        exit(1);
-    };
-
+pub fn load_script(script: String) -> Result<ScriptId, Error> {
+    let mut engine = Engine::new_raw();
     let mut scope = Scope::new();
 
-    rhai_lib::setup_constants(&mut scope);
+    RTDBG_PACKAGE.register_into_engine(&mut engine);
 
-    loop {
-        queue = condvar.wait(queue).expect("I don't think this will ever happen, but just in case - runtime.rs line 29 - mutex is poisoned");
+    let script = Script {
+        ast: engine.compile(script)?,
+    };
 
-        let script = queue.pop_front();
+    let script_store = Store::new();
 
-        if let Some(script) = script {
-            let engine_result = engine.run_with_scope(&mut scope, script.get_contents());
+    engine.call_fn::<()>(
+        &mut scope,
+        &script.ast,
+        "init",
+        (script_store.clone(), GLOBAL_STORE.clone()),
+    )?;
 
-            if let Err(e) = engine_result {
-                error!("Unable to execute script! Error: {e:?}");
-            }
-        }
-    }
+    let script_context = ScriptContext {
+        script: Arc::new(script),
+        store: script_store,
+    };
+
+    todo!()
+}
+
+pub fn execute_function<T: Clone + Send + Sync + 'static, P: FuncArgs>(
+    script: &Script,
+    function: String,
+    args: P,
+) -> Result<T, Error> {
+    let mut engine = Engine::new_raw();
+    let mut scope = Scope::new();
+
+    RTDBG_PACKAGE.register_into_engine(&mut engine);
+
+    engine
+        .call_fn::<T>(&mut scope, &script.ast, function, args)
+        .map_err(|e| e.into())
 }

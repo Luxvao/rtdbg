@@ -1,45 +1,67 @@
-use crate::error::Error;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
+use rhai::{AST, CustomType, Dynamic, EvalAltResult, Position};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ScriptId(u64);
 
 // Script related apis
 #[derive(Debug, Clone)]
 pub struct Script {
-    contents: String,
+    pub ast: AST,
 }
 
-impl From<String> for Script {
-    fn from(value: String) -> Self {
-        Script { contents: value }
-    }
+#[derive(Debug, Clone, CustomType)]
+pub struct Store {
+    inner: Arc<Mutex<HashMap<String, Dynamic>>>,
 }
 
-impl TryFrom<Vec<u8>> for Script {
-    type Error = Error;
-
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        Ok(Script {
-            contents: String::from_utf8(value)?,
-        })
-    }
+#[derive(Debug, Clone)]
+pub struct ScriptContext {
+    pub script: Arc<Script>,
+    pub store: Store,
 }
 
-impl Default for Script {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Script {
-    // Create an empty script
-    #[must_use] 
-    pub fn new() -> Script {
-        Script {
-            contents: String::new(),
+impl Store {
+    pub fn new() -> Store {
+        Store {
+            inner: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
-    // Extract the script from this
-    #[must_use] 
-    pub fn get_contents(&self) -> &String {
-        &self.contents
+    pub fn load(&self, key: String) -> Result<Dynamic, Box<EvalAltResult>> {
+        Ok(self
+            .inner
+            .lock()
+            .map_err(|e| {
+                Box::new(EvalAltResult::ErrorRuntime(
+                    e.to_string().into(),
+                    Position::NONE,
+                ))
+            })?
+            .get(&key)
+            .ok_or(Box::new(EvalAltResult::ErrorRuntime(
+                "Value not found".into(),
+                Position::NONE,
+            )))?
+            .clone())
+    }
+
+    pub fn store(&self, key: String, value: Dynamic) -> Result<(), Box<EvalAltResult>> {
+        self.inner
+            .lock()
+            .map_err(|e| {
+                Box::new(EvalAltResult::ErrorRuntime(
+                    e.to_string().into(),
+                    Position::NONE,
+                ))
+            })?
+            .insert(key, value);
+
+        Ok(())
     }
 }

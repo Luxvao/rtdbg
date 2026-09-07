@@ -1,4 +1,4 @@
-use std::os::raw::c_void;
+use std::{os::raw::c_void, sync::LazyLock};
 
 use paste::paste;
 
@@ -8,40 +8,52 @@ use librtdbg::{
         OsAbi, ProgramType, class_module, elftype_module, endianness_module, machine_module,
         osabi_module, programtype_module,
     },
+    parameter::{
+        Parameter, ParameterLocation, ParameterValue, parameterlocation_module,
+        parametervalue_module,
+    },
     proc_utils::{Permissions, Process, Vma, Vmas},
-    register_const, register_enums, register_fns, register_types,
+    register::{Register, RegisterSnapshot, register_module},
+    register_enums, register_types,
+    script::Store,
 };
-use rhai::{Engine, EvalAltResult, Scope, exported_module};
+use rhai::{
+    Engine, EvalAltResult, FuncRegistration, def_package, exported_module,
+    packages::StandardPackage,
+};
 
-pub fn setup_functions(engine: &mut Engine) {
-    register_fns!(engine, {
-        "get_proc_info" => get_proc_info,
-        "get_elf_header" => get_elf_header,
-        "get_vmas" => get_vmas,
-        "read_mem" => read_mem,
-        "write_mem" => write_mem_arr,
-        "write_mem" => write_mem_string,
-        "mprotect" => mprotect_rhai
-    });
-}
+pub static RTDBG_PACKAGE: LazyLock<RtdbgPackage> = LazyLock::new(|| RtdbgPackage::new());
 
-pub fn setup_constants(scope: &mut Scope) {
-    register_const!(scope, {
-        "PROT_NONE" => libc::PROT_NONE,
-        "PROT_READ" => libc::PROT_READ,
-        "PROT_WRITE" => libc::PROT_WRITE,
-        "PROT_EXEC" => libc::PROT_EXEC,
-        "PROT_GROWSUP" => libc::PROT_GROWSUP,
-        "PROT_GROWSDOWN" => libc::PROT_GROWSDOWN
-    });
+def_package! {
+    pub RtdbgPackage(module) : StandardPackage {
+        // Functions
+        FuncRegistration::new("get_proc_info").set_into_module(module, get_proc_info);
+        FuncRegistration::new("get_elf_header").set_into_module(module, get_elf_header);
+        FuncRegistration::new("get_vmas").set_into_module(module, get_vmas);
+        FuncRegistration::new("read_mem").set_into_module(module, read_mem);
+        FuncRegistration::new("write_mem").set_into_module(module, write_mem_arr);
+        FuncRegistration::new("write_mem").set_into_module(module, write_mem_string);
+        FuncRegistration::new("mprotect").set_into_module(module, mprotect_rhai);
+
+        // Constants
+        module.set_var("PROT_NONE", libc::PROT_NONE);
+        module.set_var("PROT_READ", libc::PROT_READ);
+        module.set_var("PROT_WRITE", libc::PROT_WRITE);
+        module.set_var("PROT_EXEC", libc::PROT_EXEC);
+        module.set_var("PROT_GROWSUP", libc::PROT_GROWSUP);
+        module.set_var("PROT_GROWSDOWN", libc::PROT_GROWSDOWN);
+    } |> |engine| {
+        setup_types(engine);
+        setup_enums(engine);
+    }
 }
 
 pub fn setup_types(engine: &mut Engine) {
-    register_types!(engine, { Permissions, Vma, Vmas, Process, ElfHeader });
+    register_types!(engine, { Permissions, Vma, Vmas, Process, ElfHeader, Store, RegisterSnapshot, Parameter });
 }
 
 pub fn setup_enums(engine: &mut Engine) {
-    register_enums!(engine, { Class, Endianness, OsAbi, ElfType, Machine, ProgramType });
+    register_enums!(engine, { Class, Endianness, OsAbi, ElfType, Machine, ProgramType, Register, ParameterValue, ParameterLocation });
 }
 
 // Get process info
