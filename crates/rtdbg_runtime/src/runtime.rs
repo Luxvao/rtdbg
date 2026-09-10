@@ -14,8 +14,8 @@ use crate::rhai_lib::RTDBG_PACKAGE;
 
 pub static GLOBAL_STORE: LazyLock<Store> = LazyLock::new(|| Store::new());
 
-pub static SCRIPT_STORAGE: Mutex<LazyLock<HashMap<ScriptId, ScriptContext>>> =
-    Mutex::new(LazyLock::new(|| HashMap::new()));
+pub static SCRIPT_STORAGE: LazyLock<Mutex<HashMap<ScriptId, ScriptContext>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub fn runtime() {
     // Set up the logger

@@ -2,4 +2,4 @@ target/
 example_bins/
 rtdbglib.json
 crates/rtdbg_wasm/wasm_reference/
-asm/trampoline_hook
+asm/hook_trampoline

@@ -1,4 +1,5 @@
 [bits 64]
+[default rel]
 
 trampoline:
         ;; allocate space for xmm regs
@@ -39,18 +40,17 @@ trampoline:
         push r14
         push r15
 
-        ;; hook_id
-        mov rdi, qword 0xdeadbeefdeadbeef
+        ;; function_id
+        mov rdi, qword [hook_id]
 
         ;; is_prefix
         mov rsi, 1
 
-        ;; &mut RegisterSnapshot
+        ;; address of the register snapshot
         mov rdx, rsp
 
         ;; dispatcher call
-        mov r10, qword 0xdeadbeefdeadbeef
-        call r10
+        call qword [dispatcher_address]
 
         ;; pop the registers
         pop r15
@@ -94,8 +94,7 @@ trampoline:
         sub rsp, 8
 
         ;; call the original
-        mov r10, qword 0xdeadbeefdeadbeef
-        call r10
+        call qword [original_function]
 
         ;; restore
         add rsp, 8
@@ -140,18 +139,17 @@ trampoline:
         push r14
         push r15
 
-        ;; hook_id
-        mov rdi, qword 0xdeadbeefdeadbeef
+        ;; function_id
+        mov rdi, qword [hook_id]
 
         ;; is_prefix
         mov rsi, 0
 
-        ;; &mut RegisterSnapshot
+        ;; address of register snapshot
         mov rdx, rsp
 
         ;; dispatcher call
-        mov r10, qword 0xdeadbeefdeadbeef
-        call r10
+        call qword [dispatcher_address]
 
         ;; pop the registers
         pop r15
@@ -193,3 +191,9 @@ trampoline:
 
         ;; finally we ret (back to the original caller that did call <plt entry>)
         ret
+
+;; Reference table
+align 8
+hook_id: dq 0xdeadbeefdeadbeef
+dispatcher_address: dq 0xdeadbeefdeadbeef
+original_function: dq 0xdeadbeefdeadbeef

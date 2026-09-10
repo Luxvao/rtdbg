@@ -45,9 +45,9 @@ pub struct Parameter {
 }
 
 impl Parameter {
-    pub fn try_resolve(
+    pub fn try_resolve<R: RegisterSnapshot>(
         &mut self,
-        register_snapshot: &RegisterSnapshot,
+        register_snapshot: &R,
         base: u64,
     ) -> Result<(), Error> {
         match &mut self.value {
@@ -118,9 +118,9 @@ impl Parameter {
         Ok(())
     }
 
-    pub fn try_commit(
+    pub fn try_commit<R: RegisterSnapshot>(
         &self,
-        register_snapshot: &mut RegisterSnapshot,
+        register_snapshot: &mut R,
         base: u64,
     ) -> Result<(), Error> {
         match &self.value {
@@ -182,9 +182,9 @@ impl Parameter {
         Ok(())
     }
 
-    pub fn acquire_value<T: Copy + FromU128>(
+    pub fn acquire_value<T: Copy + FromU128, R: RegisterSnapshot>(
         location: &ParameterLocation,
-        register_snapshot: &RegisterSnapshot,
+        register_snapshot: &R,
         base: u64,
     ) -> T {
         match location {
@@ -197,10 +197,10 @@ impl Parameter {
         }
     }
 
-    pub fn commit_value<T: ToU128>(
+    pub fn commit_value<T: ToU128, R: RegisterSnapshot>(
         value: T,
         location: &ParameterLocation,
-        register_snapshot: &mut RegisterSnapshot,
+        register_snapshot: &mut R,
         base: u64,
     ) {
         match location {

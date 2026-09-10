@@ -1,4 +1,5 @@
 pub mod api;
+pub mod arch;
 pub mod elf_utils;
 pub mod error;
 pub mod hook;

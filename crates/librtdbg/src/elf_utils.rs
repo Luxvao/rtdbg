@@ -562,7 +562,7 @@ impl ProgramHeader {
         builder.on_print(|header| format!("{header:?}"));
     }
 
-    fn try_from(
+    fn try_from_32bit(
         mut value: ProgramHeaderRaw32Bit,
         endianness: Endianness,
     ) -> Result<ProgramHeader, Error> {
@@ -577,6 +577,24 @@ impl ProgramHeader {
             filesz: value.filesz as u64,
             memsz: value.memsz as u64,
             align: value.align as u64,
+        })
+    }
+
+    fn try_from_64bit(
+        mut value: ProgramHeaderRaw64Bit,
+        endianness: Endianness,
+    ) -> Result<ProgramHeader, Error> {
+        value = value.correct_for_endianness(endianness);
+
+        Ok(ProgramHeader {
+            p_type: ProgramType::try_from(value.p_type)?,
+            flags: ProgramFlags::from(value.flags),
+            offset: value.offset,
+            vaddr: value.vaddr,
+            paddr: value.paddr,
+            filesz: value.filesz,
+            memsz: value.memsz,
+            align: value.align,
         })
     }
 }
