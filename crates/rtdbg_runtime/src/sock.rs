@@ -7,6 +7,8 @@ use std::{
 use librtdbg::api::{Request, Response};
 use log::{error, info};
 
+use crate::runtime::{load_script, run_function, status, unload_script};
+
 pub static SOCKET_PATH: LazyLock<String> = LazyLock::new(setup_sock);
 
 fn setup_sock() -> String {
@@ -35,10 +37,8 @@ pub fn io() {
 
 fn handle_client(mut stream: UnixStream) {
     loop {
-        let mut buf = [0u8; 256];
-
-        let request: Request = match postcard::from_io((&mut stream, &mut buf)) {
-            Ok((r, (_, _))) => r,
+        let request: Request = match serde_json::from_reader(&stream) {
+            Ok(r) => r,
             Err(e) => {
                 let resp = Response::Error(e.to_string());
 
@@ -49,11 +49,25 @@ fn handle_client(mut stream: UnixStream) {
         };
 
         let resp = match request {
-            Request::LoadScript { script } => {
-                todo!()
-            }
-            Request::UnloadScript { script_id } => todo!(),
-            Request::Status => todo!(),
+            Request::LoadScript { script } => load_script(script).map_or_else(
+                |e| Response::Error(e.to_string()),
+                |v| Response::LoadSuccess { script_id: v },
+            ),
+            Request::UnloadScript { script_id } => unload_script(script_id)
+                .map_or_else(|e| Response::Error(e.to_string()), |_| Response::Success),
+            Request::RunFunction {
+                script_id,
+                function,
+            } => run_function::<String, ()>(script_id, function, ()).map_or_else(
+                |e| Response::Error(e.to_string()),
+                |o| Response::RunSuccess { response: o },
+            ),
+            Request::Status => status().map_or_else(
+                |e| Response::Error(e.to_string()),
+                |scripts| Response::Status {
+                    loaded_scripts: scripts,
+                },
+            ),
         };
 
         report(&mut stream, resp);
@@ -61,7 +75,7 @@ fn handle_client(mut stream: UnixStream) {
 }
 
 fn report(stream: &mut UnixStream, resp: Response) {
-    if let Err(e) = postcard::to_io(&resp, stream) {
+    if let Err(e) = serde_json::to_writer(stream, &resp) {
         info!("{e}");
     }
 }

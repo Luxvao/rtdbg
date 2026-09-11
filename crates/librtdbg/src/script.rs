@@ -6,8 +6,8 @@ use std::{
 use rhai::{AST, CustomType, Dynamic, EvalAltResult, Position};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct ScriptId(u64);
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, CustomType, Hash, PartialEq, Eq)]
+pub struct ScriptId(pub u64);
 
 // Script related apis
 #[derive(Debug, Clone)]

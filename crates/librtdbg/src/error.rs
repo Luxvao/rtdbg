@@ -1,3 +1,5 @@
+use std::sync::PoisonError;
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -30,6 +32,18 @@ pub enum Error {
         "Loading a CStr from a register is not possible. If you wish to load a CStr pointer to by a register, use a pointer"
     )]
     CannotLoadCStrFromRegister,
-    #[error("Storing a CStr to a register is not possible.")]
+    #[error("Storing a CStr to a register is not possible")]
     CannotStoreCStrToRegister,
+    #[error("No such script exists")]
+    NoSuchScript,
+    #[error("HookSpace is in a bad state")]
+    HookSpaceBadState,
+    #[error("Architecture associated with {0} is not recognised")]
+    UnknownArchitecture(u64),
+}
+
+impl<T> From<PoisonError<T>> for Error {
+    fn from(_: PoisonError<T>) -> Self {
+        Error::MutexPoisoned
+    }
 }

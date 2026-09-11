@@ -1,5 +1,12 @@
+#![feature(const_cmp)]
+#![feature(const_index)]
+#![feature(const_trait_impl)]
+
+use std::sync::atomic::AtomicU64;
+
 pub mod api;
 pub mod arch;
+pub mod bits;
 pub mod elf_utils;
 pub mod error;
 pub mod hook;
@@ -14,3 +21,5 @@ pub mod script;
 #[cfg(test)]
 mod tests;
 pub mod utils;
+
+pub static ID_GEN: AtomicU64 = AtomicU64::new(0);

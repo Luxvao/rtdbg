@@ -3,6 +3,7 @@ use std::{os::raw::c_void, sync::LazyLock};
 use paste::paste;
 
 use librtdbg::{
+    arch::amd64::Amd64RegisterSnapshot,
     elf_utils::{
         Class, ElfHeader, ElfHeaderRaw32Bit, ElfHeaderRaw64Bit, ElfType, Endianness, Machine,
         OsAbi, ProgramType, class_module, elftype_module, endianness_module, machine_module,
@@ -13,7 +14,7 @@ use librtdbg::{
         parametervalue_module,
     },
     proc_utils::{Permissions, Process, Vma, Vmas},
-    register::{Register, RegisterSnapshot, register_module},
+    register::{Register, register_module},
     register_enums, register_types,
     script::Store,
 };
@@ -49,7 +50,7 @@ def_package! {
 }
 
 pub fn setup_types(engine: &mut Engine) {
-    register_types!(engine, { Permissions, Vma, Vmas, Process, ElfHeader, Store, RegisterSnapshot, Parameter });
+    register_types!(engine, { Permissions, Vma, Vmas, Process, ElfHeader, Store, Amd64RegisterSnapshot, Parameter });
 }
 
 pub fn setup_enums(engine: &mut Engine) {

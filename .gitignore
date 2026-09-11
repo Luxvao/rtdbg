@@ -1,5 +1,5 @@
 target/
+artefacts/
 example_bins/
 rtdbglib.json
 crates/rtdbg_wasm/wasm_reference/
-asm/hook_trampoline

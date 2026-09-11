@@ -1,14 +1,15 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, LazyLock, Mutex},
+    sync::{Arc, LazyLock, Mutex, atomic::Ordering},
 };
 
 use librtdbg::{
+    ID_GEN,
     error::Error,
     script::{Script, ScriptContext, ScriptId, Store},
 };
 use log::info;
-use rhai::{Engine, FuncArgs, Scope, packages::Package};
+use rhai::{Dynamic, Engine, FuncArgs, Scope, packages::Package};
 
 use crate::rhai_lib::RTDBG_PACKAGE;
 
@@ -46,16 +47,28 @@ pub fn load_script(script: String) -> Result<ScriptId, Error> {
         (script_store.clone(), GLOBAL_STORE.clone()),
     )?;
 
+    let script_id = ScriptId(ID_GEN.fetch_add(1, Ordering::Relaxed));
+
     let script_context = ScriptContext {
         script: Arc::new(script),
         store: script_store,
     };
 
-    todo!()
+    SCRIPT_STORAGE.lock()?.insert(script_id, script_context);
+
+    Ok(script_id)
 }
 
-pub fn execute_function<T: Clone + Send + Sync + 'static, P: FuncArgs>(
-    script: &Script,
+pub fn unload_script(script_id: ScriptId) -> Result<(), Error> {
+    if let None = SCRIPT_STORAGE.lock()?.remove(&script_id) {
+        return Err(Error::NoSuchScript);
+    }
+
+    Ok(())
+}
+
+pub fn run_function<T: Clone + Send + Sync + 'static, P: FuncArgs>(
+    script_id: ScriptId,
     function: String,
     args: P,
 ) -> Result<T, Error> {
@@ -64,7 +77,31 @@ pub fn execute_function<T: Clone + Send + Sync + 'static, P: FuncArgs>(
 
     RTDBG_PACKAGE.register_into_engine(&mut engine);
 
-    engine
-        .call_fn::<T>(&mut scope, &script.ast, function, args)
-        .map_err(|e| e.into())
+    let global_store = GLOBAL_STORE.clone();
+
+    let guard = SCRIPT_STORAGE.lock()?;
+
+    if let Some(script_ctx) = guard.get(&script_id) {
+        let script = script_ctx.script.clone();
+        let script_store = script_ctx.store.clone();
+
+        drop(guard);
+
+        let mut new_args: Vec<Dynamic> = Vec::new();
+
+        new_args.push(Dynamic::from(script_id));
+        new_args.push(Dynamic::from(script_store));
+        new_args.push(Dynamic::from(global_store));
+        args.parse(&mut new_args);
+
+        return engine
+            .call_fn(&mut scope, &script.ast, function, new_args)
+            .map_err(|e| e.into());
+    }
+
+    Err(Error::NoSuchScript)
+}
+
+pub fn status() -> Result<Vec<ScriptId>, Error> {
+    Ok(SCRIPT_STORAGE.lock()?.keys().map(|i| *i).collect())
 }
