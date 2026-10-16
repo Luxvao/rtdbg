@@ -1,6 +1,4 @@
-use std::{fs::File, io::Write};
 
-use crate::error::Error;
 
 pub const RTDBG_RUNTIME_PATH: &str = "/tmp/rtdbg.so";
 #[cfg(feature = "include_runtime")]

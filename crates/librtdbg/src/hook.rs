@@ -148,7 +148,7 @@ impl HookSpace {
         for (bitmap, ptr_s) in self.pages.iter_mut() {
             let ptr_base = *ptr_s as u64;
 
-            if ptr_base <= ptr as u64 && ptr < ptr_base + self.page_size {
+            if ptr_base <= ptr && ptr < ptr_base + self.page_size {
                 // If we're here then this is the page that contains that particular pointer
                 let slot = (ptr - ptr_base) / self.aligned_size;
 
@@ -242,7 +242,7 @@ extern "C" fn dispatcher(
 
     drop(hm_guard);
 
-    hooks.sort_unstable_by(|a, b| a.1.priority.cmp(&b.1.priority));
+    hooks.sort_unstable_by_key(|a| a.1.priority);
 
     'hooks: for (id, mut ctx) in hooks {
         if let HookStatus::Inactive = ctx.status {

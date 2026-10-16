@@ -43,7 +43,7 @@ impl Bits {
     pub fn is_all_set(&self) -> bool {
         let sum: usize = self.inner.iter().map(|i| *i as usize).sum();
 
-        let full_bytes = self.size as usize / 8;
+        let full_bytes = self.size / 8;
         let remaining = self.size % 8;
 
         sum == full_bytes * 255 + (1 << remaining) - 1

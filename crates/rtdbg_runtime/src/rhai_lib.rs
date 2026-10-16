@@ -23,7 +23,7 @@ use rhai::{
     packages::StandardPackage,
 };
 
-pub static RTDBG_PACKAGE: LazyLock<RtdbgPackage> = LazyLock::new(|| RtdbgPackage::new());
+pub static RTDBG_PACKAGE: LazyLock<RtdbgPackage> = LazyLock::new(RtdbgPackage::new);
 
 def_package! {
     pub RtdbgPackage(module) : StandardPackage {
@@ -74,8 +74,7 @@ fn get_elf_header() -> Result<ElfHeader, Box<EvalAltResult>> {
     let header_address = proc_info
         .vmas
         .iter()
-        .filter(|vma| vma.path.eq(&Some(proc_info.path.clone())) && vma.offset == 0)
-        .nth(0)
+        .filter(|vma| vma.path.eq(&Some(proc_info.path.clone())) && vma.offset == 0).next()
         .ok_or("Unable to find ELF header")?
         .saddy;
 

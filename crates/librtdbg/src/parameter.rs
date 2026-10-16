@@ -155,7 +155,7 @@ impl Parameter {
                 Self::commit_value(v.to_bits(), &self.location, register_snapshot, base);
             }
             ParameterValue::CStr(Some(cstring)) => {
-                Self::commit_cstr(&cstring, &self.location, base)?;
+                Self::commit_cstr(cstring, &self.location, base)?;
             }
             ParameterValue::Ptr(addy, parameters) => {
                 // We first construct, and only after do we write the pointer

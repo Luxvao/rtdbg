@@ -1,6 +1,6 @@
 use paste::paste;
 
-use rhai::{CustomType, Module, TypeBuilder, export_module};
+use rhai::{CustomType, TypeBuilder, export_module};
 
 use crate::{create_enum_module, error::Error};
 

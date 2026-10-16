@@ -1,6 +1,6 @@
 use std::{fs::File, io::Read, ops::Deref, path::PathBuf};
 
-use rhai::{CustomType, Dynamic, TypeBuilder};
+use rhai::{CustomType, TypeBuilder};
 
 use crate::error::Error;
 
@@ -86,19 +86,19 @@ impl Process {
 
 impl Vma {
     fn get_saddy(&mut self) -> u64 {
-        self.saddy as u64
+        self.saddy
     }
 
     fn get_eaddy(&mut self) -> u64 {
-        self.eaddy as u64
+        self.eaddy
     }
 
     fn get_offset(&mut self) -> u64 {
-        self.offset as u64
+        self.offset
     }
 
     fn get_inode(&mut self) -> u64 {
-        self.inode as u64
+        self.inode
     }
 
     fn build_extra(builder: &mut TypeBuilder<Self>) {

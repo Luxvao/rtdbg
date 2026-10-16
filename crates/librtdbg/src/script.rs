@@ -65,3 +65,9 @@ impl Store {
         Ok(())
     }
 }
+
+impl Default for Store {
+    fn default() -> Self {
+        Self::new()
+    }
+}
