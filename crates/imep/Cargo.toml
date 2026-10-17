@@ -1,0 +1,9 @@
+[package]
+name = "imep"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+imp_core = { path = "../imp_core" }
+libc = "0.2.191"
+rhai = { version = "1.26.1", default-features = false }

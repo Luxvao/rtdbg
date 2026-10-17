@@ -105,6 +105,20 @@ pub struct ProgramHeaderRaw64Bit {
     pub align: u64,
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
+pub struct Elf32DynRaw {
+    tag: i32,
+    un: u32,
+}
+
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
+pub struct Elf64DynRaw {
+    tag: i32,
+    un: u32,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Class {
     Bits32,
@@ -319,6 +333,85 @@ pub struct ProgramHeader {
     pub memsz: u64,
     #[rhai_type(readonly)]
     pub align: u64,
+}
+
+#[derive(Clone, Debug)]
+pub enum ElfDyn {
+    Null,
+    Needed(u64),
+    PltRelSz(u64),
+    PltGot(u64),
+    Hash(u64),
+    StrTab(u64),
+    SymTab(u64),
+    Rela(u64),
+    RelaSz(u64),
+    RelaEnt(u64),
+    StrSz(u64),
+    SymEnt(u64),
+    Init(u64),
+    Fini(u64),
+    SoName(u64),
+    RPath(u64),
+    Symbolic,
+    Rel(u64),
+    RelSz(u64),
+    RelEnt(u64),
+    PltRel(u64),
+    Debug(u64),
+    TextRel,
+    JmpRel(u64),
+    BindNow,
+    InitArray(u64),
+    FiniArray(u64),
+    InitArraySz(u64),
+    FiniArraySz(u64),
+    RunPath(u64),
+    Flags(u64),
+    PreInitArray(u64),
+    PreInitArraySz(u64),
+    SunwAuxiliary(u64),
+    SunwRtldInf(u64),
+    SunwFilter(u64),
+    SunwCap(u64),
+    SunwSymTab(u64),
+    SunwSymSz(u64),
+    SunwSortEnt(u64),
+    SunwSymSort(u64),
+    SunwSymSortSz(u64),
+    SunwTlsSort(u64),
+    SunwTlsSortSz(u64),
+    SunwCapInfo(u64),
+    SunwStrPad(u64),
+    SunwCapChain(u64),
+    SunwLdMach(u64),
+    SunwCapChainEnt(u64),
+    SunwCapChainSz(u64),
+    Checksum(u64),
+    PltPadSz(u64),
+    MoveEnt(u64),
+    MoveSz(u64),
+    PosFlag1(u64),
+    SymInSz(u64),
+    SymInEnt(u64),
+    Config(u64),
+    DepAudit(u64),
+    Audit(u64),
+    PltPad(u64),
+    MoveTab(u64),
+    SymInfo(u64),
+    RelaCount(u64),
+    RelCount(u64),
+    Flags1(u64),
+    VerDef(u64),
+    VerDefNum(u64),
+    VerNeed(u64),
+    VerNeedNum(u64),
+    SparcRegister(u64),
+    Auxiliary(u64),
+    Used(u64),
+    Filter(u64),
+    Unknown { tag: i64, val: u64 },
 }
 
 impl TryFrom<u8> for Class {
@@ -598,3 +691,5 @@ impl ProgramHeader {
         })
     }
 }
+
+impl ElfDyn {}

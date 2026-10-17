@@ -74,7 +74,8 @@ fn get_elf_header() -> Result<ElfHeader, Box<EvalAltResult>> {
     let header_address = proc_info
         .vmas
         .iter()
-        .filter(|vma| vma.path.eq(&Some(proc_info.path.clone())) && vma.offset == 0).next()
+        .filter(|vma| vma.path.eq(&Some(proc_info.path.clone())) && vma.offset == 0)
+        .next()
         .ok_or("Unable to find ELF header")?
         .saddy;
 
