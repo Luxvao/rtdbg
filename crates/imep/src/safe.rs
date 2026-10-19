@@ -4,8 +4,9 @@ use imp_core::Error;
 use rhai::{CustomType, TypeBuilder};
 
 use crate::raw::{
-    ElfDynRaw32Bit, ElfDynRaw64Bit, ElfHeaderRaw32Bit, ElfHeaderRaw64Bit, ProgramHeaderRaw32Bit,
-    ProgramHeaderRaw64Bit,
+    ElfDynRaw32Bit, ElfDynRaw64Bit, ElfHeaderRaw32Bit, ElfHeaderRaw64Bit, ElfRelRaw32Bit,
+    ElfRelRaw64Bit, ElfRelaRaw32Bit, ElfRelaRaw64Bit, ElfSymRaw32Bit, ElfSymRaw64Bit,
+    ProgramHeaderRaw32Bit, ProgramHeaderRaw64Bit,
 };
 
 macro_rules! gen_enum_match {
@@ -302,6 +303,139 @@ pub enum ElfDyn {
     Used(u64),
     Filter(u64),
     Unknown { tag: i64, val: u64 },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ElfSym {
+    pub name: u32,
+    pub info: u8,
+    pub other: u8,
+    pub shndx: u16,
+    pub value: u64,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RelocType {
+    None,
+
+    Relative,
+    Absolute,
+    GlobDat,
+    JumpSlot,
+    Copy,
+    IRelative,
+
+    TlsDtpMod,
+    TlsDtpOff,
+    TlsTpOff,
+    TlsDesc,
+
+    PcRel32,
+    PcRel64,
+    Plt32,
+    Got32,
+    Got32X,
+    GotOff,
+    GotPc,
+    GotPcRel,
+    GotPcRelX,
+    RexGotPcRelX,
+    Abs32ZeroExt,
+    Abs32SignExt,
+
+    TlsGd,
+    TlsLd,
+    TlsLdo,
+    TlsInitialExec,
+    TlsLocalExec,
+
+    Call,
+    CallPlt,
+    Jump24,
+    Jump26,
+    ThumbCall,
+    ThumbJump24,
+    Branch,
+    Jal,
+    RvcBranch,
+    RvcJump,
+
+    MovwAbsNc,
+    MovtAbs,
+    ThumbMovwAbsNc,
+    ThumbMovtAbs,
+    Prel31,
+    Target1,
+    Target2,
+
+    AdrPrelLo21,
+    AdrPage21,
+    AddAbsLo12,
+    Ldst8Lo12,
+    Ldst16Lo12,
+    Ldst32Lo12,
+    Ldst64Lo12,
+    Ldst128Lo12,
+    Tstbr14,
+    Condbr19,
+    AdrGotPage,
+    Ld64GotLo12,
+    TlsGdPage21,
+    TlsGdLo12,
+    TlsLdPage21,
+    TlsLdLo12,
+    TlsLdDtprelHi12,
+    TlsLdDtprelLo12,
+    TlsIePage21,
+    TlsIeLo12,
+    TlsLeTprelHi12,
+    TlsLeTprelLo12,
+    TlsDescPage21,
+    TlsDescLd64Lo12,
+    TlsDescAddLo12,
+    TlsDescCall,
+
+    GotHi20,
+    PcrelHi20,
+    PcrelLo12I,
+    PcrelLo12S,
+    Hi20,
+    Lo12I,
+    Lo12S,
+    TlsGotHi20,
+    TlsGdHi20,
+    TprelHi20,
+    TprelLo12I,
+    TprelLo12S,
+    TprelAdd,
+    Relax,
+    Align,
+    Add8,
+    Add16,
+    Add32,
+    Add64,
+    Sub8,
+    Sub16,
+    Sub32,
+    Sub64,
+
+    Unknown(u32),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ElfRel {
+    pub offset: u64,
+    pub symbol_index: u32,
+    pub r#type: RelocType,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ElfRela {
+    pub offset: u64,
+    pub symbol_index: u32,
+    pub r#type: RelocType,
+    pub addend: u64,
 }
 
 impl TryFrom<u8> for Class {
@@ -718,6 +852,359 @@ impl ElfDyn {
             Class::Bits64 => ElfDyn::from_64bit(
                 unsafe { read_unaligned(address as *const ElfDynRaw64Bit) },
                 endianness,
+            ),
+        }
+    }
+}
+
+impl ElfSym {
+    pub fn from_32bit(mut value: ElfSymRaw32Bit, endianness: Endianness) -> ElfSym {
+        value = value.correct_for_endianness(endianness);
+
+        ElfSym {
+            name: value.name,
+            info: value.info,
+            other: value.other,
+            shndx: value.shndx,
+            value: value.value as u64,
+            size: value.size as u64,
+        }
+    }
+
+    pub fn from_64bit(mut value: ElfSymRaw64Bit, endianness: Endianness) -> ElfSym {
+        value = value.correct_for_endianness(endianness);
+
+        ElfSym {
+            name: value.name,
+            info: value.info,
+            other: value.other,
+            shndx: value.shndx,
+            value: value.value,
+            size: value.size,
+        }
+    }
+
+    /// # Safety
+    /// `address` must be readable for `size_of(ElfSymRaw32/64Bit)` bytes.
+    pub unsafe fn parse_at(address: u64, class: Class, endianness: Endianness) -> ElfSym {
+        match class {
+            Class::Bits32 => ElfSym::from_32bit(
+                unsafe { read_unaligned(address as *const ElfSymRaw32Bit) },
+                endianness,
+            ),
+            Class::Bits64 => ElfSym::from_64bit(
+                unsafe { read_unaligned(address as *const ElfSymRaw64Bit) },
+                endianness,
+            ),
+        }
+    }
+}
+
+impl RelocType {
+    pub fn from(value: u32, machine: Machine) -> RelocType {
+        match machine {
+            Machine::X86 => RelocType::from_x86(value),
+            Machine::X86_64 => RelocType::from_x86_64(value),
+            Machine::AArch32 => RelocType::from_arm(value),
+            Machine::AArch64 => RelocType::from_aarch64(value),
+            Machine::RiscV => RelocType::from_riscv(value),
+            _ => RelocType::Unknown(value),
+        }
+    }
+
+    fn from_x86(value: u32) -> RelocType {
+        use RelocType::*;
+        match value {
+            0 => None,
+            1 => Absolute,
+            2 => PcRel32,
+            3 => Got32,
+            4 => Plt32,
+            5 => Copy,
+            6 => GlobDat,
+            7 => JumpSlot,
+            8 => Relative,
+            9 => GotOff,
+            10 => GotPc,
+            14 | 37 => TlsTpOff,
+            15 | 16 => TlsInitialExec,
+            17 | 34 => TlsLocalExec,
+            18 => TlsGd,
+            19 => TlsLd,
+            32 => TlsLdo,
+            35 => TlsDtpMod,
+            36 => TlsDtpOff,
+            41 => TlsDesc,
+            42 => IRelative,
+            43 => Got32X,
+            n => Unknown(n),
+        }
+    }
+
+    fn from_x86_64(value: u32) -> RelocType {
+        use RelocType::*;
+        match value {
+            0 => None,
+            1 => Absolute,
+            2 => PcRel32,
+            3 => Got32,
+            4 => Plt32,
+            5 => Copy,
+            6 => GlobDat,
+            7 => JumpSlot,
+            8 => Relative,
+            9 => GotPcRel,
+            10 => Abs32ZeroExt,
+            11 => Abs32SignExt,
+            16 => TlsDtpMod,
+            17 => TlsDtpOff,
+            18 => TlsTpOff,
+            19 => TlsGd,
+            20 => TlsLd,
+            21 => TlsLdo,
+            22 => TlsInitialExec,
+            23 => TlsLocalExec,
+            36 => TlsDesc,
+            37 => IRelative,
+            41 => GotPcRelX,
+            42 => RexGotPcRelX,
+            n => Unknown(n),
+        }
+    }
+
+    fn from_arm(value: u32) -> RelocType {
+        use RelocType::*;
+        match value {
+            0 => None,
+            2 => Absolute,
+            3 => PcRel32,
+            10 => ThumbCall,
+            13 => TlsDesc,
+            17 => TlsDtpMod,
+            18 => TlsDtpOff,
+            19 => TlsTpOff,
+            20 => Copy,
+            21 => GlobDat,
+            22 => JumpSlot,
+            23 => Relative,
+            24 => GotOff,
+            27 => Plt32,
+            28 => Call,
+            29 => Jump24,
+            30 => ThumbJump24,
+            38 => Target1,
+            41 => Target2,
+            42 => Prel31,
+            43 => MovwAbsNc,
+            44 => MovtAbs,
+            47 => ThumbMovwAbsNc,
+            48 => ThumbMovtAbs,
+            104 => TlsGd,
+            105 => TlsLd,
+            106 => TlsLdo,
+            107 => TlsInitialExec,
+            108 => TlsLocalExec,
+            160 => IRelative,
+            n => Unknown(n),
+        }
+    }
+
+    fn from_aarch64(value: u32) -> Self {
+        use RelocType::*;
+        match value {
+            0 => None,
+            257 | 258 => Absolute,
+            260 => PcRel64,
+            261 => PcRel32,
+            274 => AdrPrelLo21,
+            275 | 276 => AdrPage21,
+            277 => AddAbsLo12,
+            278 => Ldst8Lo12,
+            279 => Tstbr14,
+            280 => Condbr19,
+            282 => Jump26,
+            283 => Call,
+            284 => Ldst16Lo12,
+            285 => Ldst32Lo12,
+            286 => Ldst64Lo12,
+            299 => Ldst128Lo12,
+            311 => AdrGotPage,
+            312 => Ld64GotLo12,
+            513 => TlsGdPage21,
+            514 => TlsGdLo12,
+            517 => TlsLdPage21,
+            518 => TlsLdLo12,
+            528 => TlsLdDtprelHi12,
+            529 | 530 => TlsLdDtprelLo12,
+            541 => TlsIePage21,
+            542 => TlsIeLo12,
+            549 => TlsLeTprelHi12,
+            550 | 551 => TlsLeTprelLo12,
+            562 => TlsDescPage21,
+            563 => TlsDescLd64Lo12,
+            564 => TlsDescAddLo12,
+            569 => TlsDescCall,
+            1024 => Copy,
+            1025 => GlobDat,
+            1026 => JumpSlot,
+            1027 => Relative,
+            1028 => TlsDtpMod,
+            1029 => TlsDtpOff,
+            1030 => TlsTpOff,
+            1031 => TlsDesc,
+            1032 => IRelative,
+            n => Unknown(n),
+        }
+    }
+
+    fn from_riscv(value: u32) -> RelocType {
+        use RelocType::*;
+        match value {
+            0 => None,
+            1 | 2 => Absolute,
+            3 => Relative,
+            4 => Copy,
+            5 => JumpSlot,
+            6 | 7 => TlsDtpMod,
+            8 | 9 => TlsDtpOff,
+            10 | 11 => TlsTpOff,
+            12 => TlsDesc,
+            16 => Branch,
+            17 => Jal,
+            18 => Call,
+            19 => CallPlt,
+            20 => GotHi20,
+            21 => TlsGotHi20,
+            22 => TlsGdHi20,
+            23 => PcrelHi20,
+            24 => PcrelLo12I,
+            25 => PcrelLo12S,
+            26 => Hi20,
+            27 => Lo12I,
+            28 => Lo12S,
+            29 => TprelHi20,
+            30 => TprelLo12I,
+            31 => TprelLo12S,
+            32 => TprelAdd,
+            33 => Add8,
+            34 => Add16,
+            35 => Add32,
+            36 => Add64,
+            37 => Sub8,
+            38 => Sub16,
+            39 => Sub32,
+            40 => Sub64,
+            43 => Align,
+            44 => RvcBranch,
+            45 => RvcJump,
+            51 => Relax,
+            58 => IRelative,
+            n => Unknown(n),
+        }
+    }
+}
+
+impl ElfRel {
+    pub fn from_32bit(
+        mut value: ElfRelRaw32Bit,
+        endianness: Endianness,
+        machine: Machine,
+    ) -> ElfRel {
+        value = value.correct_for_endianness(endianness);
+
+        ElfRel {
+            offset: value.offset as u64,
+            symbol_index: value.info >> 8,
+            r#type: RelocType::from(value.info & 0xff, machine),
+        }
+    }
+
+    pub fn from_64bit(
+        mut value: ElfRelRaw64Bit,
+        endianness: Endianness,
+        machine: Machine,
+    ) -> ElfRel {
+        value = value.correct_for_endianness(endianness);
+
+        ElfRel {
+            offset: value.offset,
+            symbol_index: (value.info >> 32) as u32,
+            r#type: RelocType::from(value.info as u32, machine),
+        }
+    }
+
+    /// # Safety
+    /// `address` must be readable for `size_of(ElfRelRaw32/64Bit)` bytes.
+    pub unsafe fn parse_at(
+        address: u64,
+        class: Class,
+        endianness: Endianness,
+        machine: Machine,
+    ) -> ElfRel {
+        match class {
+            Class::Bits32 => ElfRel::from_32bit(
+                unsafe { read_unaligned(address as *const ElfRelRaw32Bit) },
+                endianness,
+                machine,
+            ),
+            Class::Bits64 => ElfRel::from_64bit(
+                unsafe { read_unaligned(address as *const ElfRelRaw64Bit) },
+                endianness,
+                machine,
+            ),
+        }
+    }
+}
+
+impl ElfRela {
+    pub fn from_32bit(
+        mut value: ElfRelaRaw32Bit,
+        endianness: Endianness,
+        machine: Machine,
+    ) -> ElfRela {
+        value = value.correct_for_endianness(endianness);
+
+        ElfRela {
+            offset: value.offset as u64,
+            symbol_index: value.offset >> 8,
+            r#type: RelocType::from(value.offset & 0xff, machine),
+            addend: value.addend as u64,
+        }
+    }
+
+    pub fn from_64bit(
+        mut value: ElfRelaRaw64Bit,
+        endianness: Endianness,
+        machine: Machine,
+    ) -> ElfRela {
+        value = value.correct_for_endianness(endianness);
+
+        ElfRela {
+            offset: value.offset,
+            symbol_index: (value.info >> 32) as u32,
+            r#type: RelocType::from(value.info as u32, machine),
+            addend: value.addend,
+        }
+    }
+
+    /// # Safety
+    /// `address` must be readable for `size_of(ElfRelaRaw32/64Bit)` bytes.
+    pub unsafe fn parse_at(
+        address: u64,
+        class: Class,
+        endianness: Endianness,
+        machine: Machine,
+    ) -> ElfRela {
+        match class {
+            Class::Bits32 => ElfRela::from_32bit(
+                unsafe { read_unaligned(address as *const ElfRelaRaw32Bit) },
+                endianness,
+                machine,
+            ),
+            Class::Bits64 => ElfRela::from_64bit(
+                unsafe { read_unaligned(address as *const ElfRelaRaw64Bit) },
+                endianness,
+                machine,
             ),
         }
     }

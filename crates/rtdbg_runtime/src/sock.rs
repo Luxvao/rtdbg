@@ -6,6 +6,7 @@ use std::{
 
 use librtdbg::api::{Request, Response};
 use log::{error, info};
+use rhai::Dynamic;
 
 use crate::runtime::{load_script, run_function, status, unload_script};
 
@@ -58,10 +59,29 @@ fn handle_client(mut stream: UnixStream) {
             Request::RunFunction {
                 script_id,
                 function,
-            } => run_function::<String, ()>(script_id, function, ()).map_or_else(
-                |e| Response::Error(e.to_string()),
-                |o| Response::RunSuccess { response: o },
-            ),
+                params,
+            } => {
+                if let Some(params) = params {
+                    run_function::<Dynamic, (Dynamic,)>(
+                        script_id,
+                        function,
+                        (serde_json::from_value(params).unwrap_or_default(),),
+                    )
+                    .map_or_else(
+                        |e| Response::Error(e.to_string()),
+                        |o| Response::RunSuccess {
+                            response: serde_json::to_value(o).unwrap_or_default(),
+                        },
+                    )
+                } else {
+                    run_function::<Dynamic, ()>(script_id, function, ()).map_or_else(
+                        |e| Response::Error(e.to_string()),
+                        |o| Response::RunSuccess {
+                            response: serde_json::to_value(o).unwrap_or_default(),
+                        },
+                    )
+                }
+            }
             Request::Status => status().map_or_else(
                 |e| Response::Error(e.to_string()),
                 |scripts| Response::Status {

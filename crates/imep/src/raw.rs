@@ -92,6 +92,54 @@ pub struct ElfDynRaw64Bit {
     pub un: u64,
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
+pub struct ElfSymRaw32Bit {
+    pub name: u32,
+    pub value: u32,
+    pub size: u32,
+    pub info: u8,
+    pub other: u8,
+    pub shndx: u16,
+}
+
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
+pub struct ElfSymRaw64Bit {
+    pub name: u32,
+    pub info: u8,
+    pub other: u8,
+    pub shndx: u16,
+    pub value: u64,
+    pub size: u64,
+}
+
+#[repr(C, packed)]
+pub struct ElfRelRaw32Bit {
+    pub offset: u32,
+    pub info: u32,
+}
+
+#[repr(C, packed)]
+pub struct ElfRelRaw64Bit {
+    pub offset: u64,
+    pub info: u64,
+}
+
+#[repr(C, packed)]
+pub struct ElfRelaRaw32Bit {
+    pub offset: u32,
+    pub info: u32,
+    pub addend: u32,
+}
+
+#[repr(C, packed)]
+pub struct ElfRelaRaw64Bit {
+    pub offset: u64,
+    pub info: u64,
+    pub addend: u64,
+}
+
 impl ElfHeaderRaw32Bit {
     pub(crate) fn correct_for_endianness(mut self) -> Result<ElfHeaderRaw32Bit, Error> {
         if Endianness::NATIVE == Endianness::try_from(self.data)? {
@@ -205,6 +253,90 @@ impl ElfDynRaw64Bit {
 
         self.tag = self.tag.swap_bytes();
         self.un = self.un.swap_bytes();
+
+        self
+    }
+}
+
+impl ElfSymRaw32Bit {
+    pub(crate) fn correct_for_endianness(mut self, endianness: Endianness) -> ElfSymRaw32Bit {
+        if Endianness::NATIVE == endianness {
+            return self;
+        }
+
+        self.name = self.name.swap_bytes();
+        self.value = self.value.swap_bytes();
+        self.size = self.size.swap_bytes();
+        self.shndx = self.shndx.swap_bytes();
+
+        self
+    }
+}
+
+impl ElfSymRaw64Bit {
+    pub(crate) fn correct_for_endianness(mut self, endianness: Endianness) -> ElfSymRaw64Bit {
+        if Endianness::NATIVE == endianness {
+            return self;
+        }
+
+        self.name = self.name.swap_bytes();
+        self.shndx = self.shndx.swap_bytes();
+        self.value = self.value.swap_bytes();
+        self.size = self.size.swap_bytes();
+
+        self
+    }
+}
+
+impl ElfRelRaw32Bit {
+    pub(crate) fn correct_for_endianness(mut self, endianness: Endianness) -> ElfRelRaw32Bit {
+        if Endianness::NATIVE == endianness {
+            return self;
+        }
+
+        self.offset = self.offset.swap_bytes();
+        self.info = self.info.swap_bytes();
+
+        self
+    }
+}
+
+impl ElfRelRaw64Bit {
+    pub(crate) fn correct_for_endianness(mut self, endianness: Endianness) -> ElfRelRaw64Bit {
+        if Endianness::NATIVE == endianness {
+            return self;
+        }
+
+        self.offset = self.offset.swap_bytes();
+        self.info = self.info.swap_bytes();
+
+        self
+    }
+}
+
+impl ElfRelaRaw32Bit {
+    pub(crate) fn correct_for_endianness(mut self, endianness: Endianness) -> ElfRelaRaw32Bit {
+        if Endianness::NATIVE == endianness {
+            return self;
+        }
+
+        self.offset = self.offset.swap_bytes();
+        self.info = self.info.swap_bytes();
+        self.addend = self.addend.swap_bytes();
+
+        self
+    }
+}
+
+impl ElfRelaRaw64Bit {
+    pub(crate) fn correct_for_endianness(mut self, endianness: Endianness) -> ElfRelaRaw64Bit {
+        if Endianness::NATIVE == endianness {
+            return self;
+        }
+
+        self.offset = self.offset.swap_bytes();
+        self.info = self.info.swap_bytes();
+        self.addend = self.addend.swap_bytes();
 
         self
     }

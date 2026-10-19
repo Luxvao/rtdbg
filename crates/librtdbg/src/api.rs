@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::script::ScriptId;
 
@@ -13,6 +14,7 @@ pub enum Request {
     RunFunction {
         script_id: ScriptId,
         function: String,
+        params: Option<Value>,
     },
     Status,
 }
@@ -21,7 +23,7 @@ pub enum Request {
 pub enum Response {
     Success,
     LoadSuccess { script_id: ScriptId },
-    RunSuccess { response: String },
+    RunSuccess { response: Value },
     Status { loaded_scripts: Vec<ScriptId> },
     Error(String),
 }

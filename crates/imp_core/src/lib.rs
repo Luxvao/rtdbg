@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 pub trait Parser {
-    fn import_slots() -> impl Iterator<Item = ImportSlot>;
+    fn import_slots<T>(extra: T) -> impl Iterator<Item = ImportSlot>;
 }
 
 #[derive(Clone, Debug)]
