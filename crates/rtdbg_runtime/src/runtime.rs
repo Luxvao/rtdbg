@@ -25,7 +25,9 @@ pub fn runtime() {
     // Display the PID of this process
     info!("PID: {}", std::process::id());
 
-    loop {}
+    loop {
+        todo!()
+    }
 }
 
 pub fn load_script(script: String) -> Result<ScriptId, Error> {

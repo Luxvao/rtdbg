@@ -13,8 +13,6 @@ pub enum Error {
     #[error("{0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
     #[error("{0}")]
-    PostcardError(#[from] postcard::Error),
-    #[error("{0}")]
     RhaiParseError(#[from] rhai::ParseError),
     #[error("{0}")]
     EvalAltResult(#[from] Box<rhai::EvalAltResult>),

@@ -1,4 +1,11 @@
+#[cfg(feature = "include_runtime")]
+use std::fs::File;
 
+#[cfg(feature = "include_runtime")]
+use std::io::Write;
+
+#[cfg(feature = "include_runtime")]
+use crate::error::Error;
 
 pub const RTDBG_RUNTIME_PATH: &str = "/tmp/rtdbg.so";
 #[cfg(feature = "include_runtime")]

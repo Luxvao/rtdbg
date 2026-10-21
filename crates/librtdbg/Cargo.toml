@@ -13,7 +13,6 @@ imep = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 paste = { workspace = true }
-postcard = { workspace = true }
 rhai = { workspace = true, features = ["sync"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

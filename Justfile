@@ -33,3 +33,7 @@ run: build
 run_gui: gui
     cargo run --release -p rtdbg_gui
 
+# Clean everything
+clean:
+    cargo clean
+    rm -fr artefacts

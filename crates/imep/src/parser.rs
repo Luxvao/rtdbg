@@ -140,7 +140,7 @@ extern "C" fn phdr_callback(info: *mut dl_phdr_info, _: size_t, data: *mut c_voi
 
         for j in 0..dyn_arr_size {
             // Now we're walking the PT_DYNAMIC array
-            let dyn_entry_address = dyn_arr_base_address + j as u64 * dyn_size as u64;
+            let dyn_entry_address = dyn_arr_base_address + j * dyn_size as u64;
 
             match unsafe {
                 ElfDyn::parse_at(dyn_entry_address, parse_info.class, parse_info.endianness)
