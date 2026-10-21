@@ -1,3 +1,18 @@
 [workspace]
 resolver = "2"
 members = ["crates/rtdbg_runtime", "crates/librtdbg", "crates/example_target", "crates/rtdbg_wasm", "crates/imp_core", "crates/imep"]
+
+[workspace.dependencies]
+colog = "1.4.0"
+ctor = "1.0.13"
+imep = { path = "crates/imep" }
+imp_core = { path = "crates/imp_core" }
+libc = "0.2.191"
+librtdbg = { path = "crates/librtdbg" }
+log = "0.4.34"
+paste = "1.0.15"
+postcard = "1.1.3"
+rhai = { version = "1.27.0", default-features = false }
+serde = "1.0.229"
+serde_json = "1.0.154"
+thiserror = "2.0.21"

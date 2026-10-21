@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rhai = { version = "1.27.0", default-features = false }
-thiserror = "2.0.21"
+rhai = { workspace = true }
+thiserror = { workspace = true }

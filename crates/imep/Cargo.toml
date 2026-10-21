@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-imp_core = { path = "../imp_core" }
-libc = "0.2.191"
-rhai = { version = "1.26.1", default-features = false }
+imp_core = { workspace = true }
+libc = { workspace = true }
+rhai = { workspace = true }
