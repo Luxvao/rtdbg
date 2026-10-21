@@ -7,6 +7,8 @@ edition = "2024"
 crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
+imp_core = { path = "../imp_core" }
+imep = { path = "../imep" }
 colog = "1.3.0"
 ctor = "0.4.2"
 log = "0.4.27"

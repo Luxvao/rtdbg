@@ -24,10 +24,6 @@ pub enum Error {
     VmaError(String),
     #[error("Mutex poisoned")]
     MutexPoisoned,
-    #[error("Failed to parse provided ELF header")]
-    ElfHeaderParsingError,
-    #[error("Failed to parse provided program header")]
-    ProgramHeaderParsingError,
     #[error(
         "Loading a CStr from a register is not possible. If you wish to load a CStr pointer to by a register, use a pointer"
     )]
@@ -40,6 +36,12 @@ pub enum Error {
     HookSpaceBadState,
     #[error("Architecture associated with {0} is not recognised")]
     UnknownArchitecture(u64),
+    #[error("Unable to allocate hook")]
+    UnableToAllocateHook,
+    #[error("Unable to free hook")]
+    UnableToFreeHook,
+    #[error("Unable to allocate page")]
+    UnableToAllocatePage,
 }
 
 impl<T> From<PoisonError<T>> for Error {

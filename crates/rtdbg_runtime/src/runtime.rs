@@ -40,14 +40,14 @@ pub fn load_script(script: String) -> Result<ScriptId, Error> {
 
     let script_store = Store::new();
 
+    let script_id = ScriptId(ID_GEN.fetch_add(1, Ordering::Relaxed));
+
     engine.call_fn::<()>(
         &mut scope,
         &script.ast,
         "init",
-        (script_store.clone(), GLOBAL_STORE.clone()),
+        (script_id, script_store.clone(), GLOBAL_STORE.clone()),
     )?;
-
-    let script_id = ScriptId(ID_GEN.fetch_add(1, Ordering::Relaxed));
 
     let script_context = ScriptContext {
         script: Arc::new(script),
@@ -69,7 +69,7 @@ pub fn unload_script(script_id: ScriptId) -> Result<(), Error> {
 
 pub fn run_function<T: Clone + Send + Sync + 'static, P: FuncArgs>(
     script_id: ScriptId,
-    function: String,
+    function: &str,
     args: P,
 ) -> Result<T, Error> {
     let mut engine = Engine::new_raw();

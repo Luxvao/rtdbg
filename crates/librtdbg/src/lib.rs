@@ -7,7 +7,6 @@ use std::sync::atomic::AtomicU64;
 pub mod api;
 pub mod arch;
 pub mod bits;
-pub mod elf_utils;
 pub mod error;
 pub mod hook;
 pub mod memory;

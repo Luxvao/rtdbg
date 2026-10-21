@@ -64,7 +64,7 @@ fn handle_client(mut stream: UnixStream) {
                 if let Some(params) = params {
                     run_function::<Dynamic, (Dynamic,)>(
                         script_id,
-                        function,
+                        &function,
                         (serde_json::from_value(params).unwrap_or_default(),),
                     )
                     .map_or_else(
@@ -74,7 +74,7 @@ fn handle_client(mut stream: UnixStream) {
                         },
                     )
                 } else {
-                    run_function::<Dynamic, ()>(script_id, function, ()).map_or_else(
+                    run_function::<Dynamic, ()>(script_id, &function, ()).map_or_else(
                         |e| Response::Error(e.to_string()),
                         |o| Response::RunSuccess {
                             response: serde_json::to_value(o).unwrap_or_default(),

@@ -5,6 +5,7 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
+use imp_core::ImportSlot;
 use libc::{
     _SC_PAGESIZE, MAP_ANONYMOUS, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE, mmap, sysconf,
 };
@@ -12,7 +13,7 @@ use log::warn;
 
 use crate::{arch::TrampolineGenDesc, bits::Bits, error::Error, parameter::Parameter};
 
-pub static FUNCTIONS: LazyLock<Mutex<HashMap<String, FunctionId>>> =
+pub static FUNCTIONS: LazyLock<Mutex<HashMap<ImportSlot, FunctionId>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub static HOOKS: LazyLock<Mutex<HashMap<FunctionId, HookManager>>> =
@@ -45,6 +46,7 @@ pub fn generate_trampoline<const SIZE: usize>(
     modified_trampoline
 }
 
+#[derive(Debug)]
 pub struct HookSpace {
     aligned_size: u64,
     page_size: u64,
@@ -110,7 +112,9 @@ impl HookSpace {
 
             for i in 0..slots {
                 if bitmap.get(i as usize) == Some(0) {
-                    bitmap.set(i as usize, 1);
+                    bitmap
+                        .set(i as usize, 1)
+                        .map_err(|_| Error::UnableToAllocateHook)?;
 
                     return Ok(unsafe {
                         (*ptr as *mut u8).byte_add((i * self.aligned_size) as usize)
@@ -138,11 +142,15 @@ impl HookSpace {
             )
         };
 
+        if address as i64 == -1 {
+            return Err(Error::UnableToAllocatePage);
+        }
+
         self.pages.push_front((Bits::new(slots as usize), address));
         Ok(())
     }
 
-    pub fn free(&mut self, ptr: *mut u8) {
+    pub fn free(&mut self, ptr: *mut u8) -> Result<(), Error> {
         let ptr = ptr as u64;
 
         for (bitmap, ptr_s) in self.pages.iter_mut() {
@@ -152,9 +160,13 @@ impl HookSpace {
                 // If we're here then this is the page that contains that particular pointer
                 let slot = (ptr - ptr_base) / self.aligned_size;
 
-                bitmap.set(slot as usize, 0);
+                bitmap
+                    .set(slot as usize, 0)
+                    .map_err(|_| Error::UnableToFreeHook)?;
             }
         }
+
+        Ok(())
     }
 }
 

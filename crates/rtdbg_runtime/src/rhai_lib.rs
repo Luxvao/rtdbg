@@ -1,14 +1,13 @@
 use std::{os::raw::c_void, sync::LazyLock};
 
+use imep::{
+    Class, ElfHeader, ElfRel, ElfRela, ElfSym, ElfType, Endianness, Machine, OsAbi, ProgramHeader,
+    ProgramType, RelocType, enum_rhai_impl::*,
+};
 use paste::paste;
 
 use librtdbg::{
     arch::amd64::Amd64RegisterSnapshot,
-    elf_utils::{
-        Class, ElfHeader, ElfHeaderRaw32Bit, ElfHeaderRaw64Bit, ElfType, Endianness, Machine,
-        OsAbi, ProgramType, class_module, elftype_module, endianness_module, machine_module,
-        osabi_module, programtype_module,
-    },
     parameter::{
         Parameter, ParameterLocation, ParameterValue, parameterlocation_module,
         parametervalue_module,
@@ -50,11 +49,11 @@ def_package! {
 }
 
 pub fn setup_types(engine: &mut Engine) {
-    register_types!(engine, { Permissions, Vma, Vmas, Process, ElfHeader, Store, Amd64RegisterSnapshot, Parameter });
+    register_types!(engine, { Permissions, Vma, Vmas, Process, ElfHeader, ProgramHeader, ElfSym, ElfRel, ElfRela, Store, Amd64RegisterSnapshot, Parameter });
 }
 
 pub fn setup_enums(engine: &mut Engine) {
-    register_enums!(engine, { Class, Endianness, OsAbi, ElfType, Machine, ProgramType, Register, ParameterValue, ParameterLocation });
+    register_enums!(engine, { Class, Endianness, OsAbi, ElfType, Machine, ProgramType, RelocType, Register, ParameterValue, ParameterLocation });
 }
 
 // Get process info
@@ -79,17 +78,7 @@ fn get_elf_header() -> Result<ElfHeader, Box<EvalAltResult>> {
         .ok_or("Unable to find ELF header")?
         .saddy;
 
-    unsafe {
-        let elf_header_32 = *(header_address as *const ElfHeaderRaw32Bit);
-
-        if elf_header_32.class == 2 {
-            let elf_header_64 = *(header_address as *const ElfHeaderRaw64Bit);
-
-            return ElfHeader::try_from(elf_header_64).map_err(|e| format!("{e}").into());
-        }
-
-        ElfHeader::try_from(elf_header_32).map_err(|e| format!("{e}").into())
-    }
+    Ok(unsafe { ElfHeader::parse_at(header_address).map_err(|_| "Unable to parse ELF header")? })
 }
 
 // Reading a specific amount of data from an address into an array

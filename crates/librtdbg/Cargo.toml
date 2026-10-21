@@ -8,6 +8,8 @@ default = []
 include_runtime = []
 
 [dependencies]
+imp_core = { path = "../imp_core" }
+imep = { path = "../imep" }
 libc = "0.2.189"
 log = "0.4.27"
 paste = "1.0.15"

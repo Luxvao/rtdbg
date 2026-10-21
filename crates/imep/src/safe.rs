@@ -167,62 +167,36 @@ pub struct ProgramFlags(u32);
 #[derive(Clone, Debug, CustomType)]
 #[rhai_type(extra = Self::build_extra)]
 pub struct ElfHeader {
-    #[rhai_type(readonly)]
     pub class: Class,
-    #[rhai_type(readonly)]
     pub data: Endianness,
-    #[rhai_type(readonly)]
     pub version: u8,
-    #[rhai_type(readonly)]
     pub osabi: OsAbi,
-    #[rhai_type(readonly)]
     pub abiversion: u8,
-    #[rhai_type(readonly)]
     pub e_type: ElfType,
-    #[rhai_type(readonly)]
     pub machine: Machine,
-    #[rhai_type(readonly)]
     pub e_version: u32,
-    #[rhai_type(readonly)]
     pub entry: u64,
-    #[rhai_type(readonly)]
     pub phoff: u64,
-    #[rhai_type(readonly)]
     pub shoff: u64,
-    #[rhai_type(readonly)]
     pub flags: u32,
-    #[rhai_type(readonly)]
     pub ehsize: u16,
-    #[rhai_type(readonly)]
     pub phentsize: u16,
-    #[rhai_type(readonly)]
     pub phnum: u16,
-    #[rhai_type(readonly)]
     pub shentsize: u16,
-    #[rhai_type(readonly)]
     pub shnum: u16,
-    #[rhai_type(readonly)]
     pub shstrndx: u16,
 }
 
 #[derive(Clone, Debug, CustomType)]
 #[rhai_type(extra = Self::build_extra)]
 pub struct ProgramHeader {
-    #[rhai_type(readonly)]
     pub p_type: ProgramType,
-    #[rhai_type(readonly)]
     pub flags: ProgramFlags,
-    #[rhai_type(readonly)]
     pub offset: u64,
-    #[rhai_type(readonly)]
     pub vaddr: u64,
-    #[rhai_type(readonly)]
     pub paddr: u64,
-    #[rhai_type(readonly)]
     pub filesz: u64,
-    #[rhai_type(readonly)]
     pub memsz: u64,
-    #[rhai_type(readonly)]
     pub align: u64,
 }
 
@@ -305,7 +279,7 @@ pub enum ElfDyn {
     Unknown { tag: i64, val: u64 },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, CustomType)]
 pub struct ElfSym {
     pub name: u32,
     pub info: u8,
@@ -423,14 +397,14 @@ pub enum RelocType {
     Unknown(u32),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, CustomType)]
 pub struct ElfRel {
     pub offset: u64,
     pub symbol_index: u32,
     pub r#type: RelocType,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, CustomType)]
 pub struct ElfRela {
     pub offset: u64,
     pub symbol_index: u32,
