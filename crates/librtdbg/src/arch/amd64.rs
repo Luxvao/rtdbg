@@ -5,12 +5,12 @@ use crate::{
     register::{Register, RegisterSnapshot},
 };
 
-pub const TRAMPOLINE_SIZE: usize = 760;
+pub const TRAMPOLINE_SIZE: usize = 752;
 
 const TRAMPOLINE_HOOK: &[u8; TRAMPOLINE_SIZE] =
     include_bytes!("../../../../artefacts/amd64_trampoline.bin");
 
-const FUNCTION_ID_OFFSET: u16 = 0x2e0;
+const FUNCTION_ID_OFFSET: u16 = 0x2d8;
 const DISPATCHER_ADDRESS_OFFSET: u16 = FUNCTION_ID_OFFSET + 8;
 const ORIGINAL_FUNCTION_OFFSET: u16 = FUNCTION_ID_OFFSET + 16;
 

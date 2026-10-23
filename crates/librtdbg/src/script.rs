@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use rhai::{AST, CustomType, Dynamic, EvalAltResult, Position};
+use rhai::{AST, CustomType, Dynamic, EvalAltResult, FuncArgs, Position};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, CustomType, Hash, PartialEq, Eq)]
@@ -13,6 +13,12 @@ pub struct ScriptId(pub u64);
 #[derive(Debug, Clone)]
 pub struct Script {
     pub ast: AST,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScriptCallback {
+    pub script_id: ScriptId,
+    pub callback: String,
 }
 
 #[derive(Debug, Clone, CustomType)]

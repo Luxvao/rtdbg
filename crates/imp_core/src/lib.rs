@@ -4,7 +4,7 @@ pub trait Parser {
     fn import_slots<T>(extra: T) -> impl Iterator<Item = ImportSlot>;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ImportSlot {
     pub function: String,
     pub module: String,

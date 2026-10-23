@@ -1,6 +1,9 @@
 use std::sync::PoisonError;
 
+use imp_core::ImportSlot;
 use thiserror::Error;
+
+use crate::hook::ImportId;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -40,6 +43,14 @@ pub enum Error {
     UnableToFreeHook,
     #[error("Unable to allocate page")]
     UnableToAllocatePage,
+    #[error("Unable to patch {0:?} as it's already patched")]
+    ImportAlreadyPatched(ImportSlot),
+    #[error("Unable to unpatch {0:?} as it's not patched")]
+    ImportNotPatched(ImportSlot),
+    #[error("Slot {0:?} has changed while being patched")]
+    SlotChanged(ImportSlot),
+    #[error("Clearing the cache has failed")]
+    IcacheFlushFailed,
 }
 
 impl<T> From<PoisonError<T>> for Error {

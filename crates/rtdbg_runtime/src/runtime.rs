@@ -5,10 +5,13 @@ use std::{
 
 use librtdbg::{
     ID_GEN,
+    either::Either,
     error::Error,
-    script::{Script, ScriptContext, ScriptId, Store},
+    hook::HookId,
+    parameter::Parameter,
+    script::{Script, ScriptCallback, ScriptContext, ScriptId, Store},
 };
-use log::info;
+use log::{info, warn};
 use rhai::{Dynamic, Engine, FuncArgs, Scope, packages::Package};
 
 use crate::rhai_lib::RTDBG_PACKAGE;
@@ -16,6 +19,9 @@ use crate::rhai_lib::RTDBG_PACKAGE;
 pub static GLOBAL_STORE: LazyLock<Store> = LazyLock::new(Store::new);
 
 pub static SCRIPT_STORAGE: LazyLock<Mutex<HashMap<ScriptId, ScriptContext>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub static RHAI_HOOK_CALLBACKS: LazyLock<Mutex<HashMap<HookId, ScriptCallback>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub fn runtime() {
@@ -106,4 +112,27 @@ pub fn run_function<T: Clone + Send + Sync + 'static, P: FuncArgs>(
 
 pub fn status() -> Result<Vec<ScriptId>, Error> {
     Ok(SCRIPT_STORAGE.lock()?.keys().copied().collect())
+}
+
+pub fn rhai_dispatcher(
+    hook_id: HookId,
+    parameters: Either<&mut Vec<Parameter>, &mut HashMap<String, Parameter>>,
+) {
+    let Ok(rhai_hook_callbacks_guard) = RHAI_HOOK_CALLBACKS.lock() else {
+        warn!("`RHAI_HOOK_CALLBACKS` poisoned, skipping!");
+        return;
+    };
+
+    let Some(script_callback) = rhai_hook_callbacks_guard.get(&hook_id).map(|i| i.clone()) else {
+        warn!("No rhai callback associated with {hook_id:?}, skipping!");
+        return;
+    };
+
+    drop(rhai_hook_callbacks_guard);
+
+    // match parameters {
+    // Either::First(vec) => run_function(script_callback.script_id, &script_callback.callback, (vec,)),
+    // Either::Second(map) =>
+    // }
+    todo!()
 }

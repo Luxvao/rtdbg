@@ -40,8 +40,8 @@ trampoline:
         push r14
         push r15
 
-        ;; function_id
-        mov rdi, qword [function_id]
+        ;; import_id
+        mov rdi, qword [import_id]
 
         ;; is_prefix
         mov rsi, 1
@@ -54,9 +54,6 @@ trampoline:
 
         ;; pass in slot address
         lea r8, [rsp + 0x188]
-
-        ;; architecture marker
-        mov r9, 0
 
         ;; dispatcher call
         call qword [dispatcher_address]
@@ -147,8 +144,8 @@ trampoline:
         push r14
         push r15
 
-        ;; function_id
-        mov rdi, qword [function_id]
+        ;; import_id
+        mov rdi, qword [import_id]
 
         ;; is_prefix
         mov rsi, 0
@@ -158,9 +155,6 @@ trampoline:
 
         ;; pass in slot address
         lea r8, [rsp + 0x188]
-
-        ;; architecture marker
-        mov r9, 0
 
         ;; dispatcher call
         call qword [dispatcher_address]
@@ -211,6 +205,6 @@ trampoline:
 
 ;; Reference table
 align 8
-function_id: dq 0xdeadbeefdeadbeef
+import_id: dq 0xdeadbeefdeadbeef
 dispatcher_address: dq 0xdeadbeefdeadbeef
 original_function: dq 0xdeadbeefdeadbeef

@@ -9,4 +9,11 @@ pub struct TrampolineGenDesc<const SIZE: usize> {
 }
 
 #[cfg(target_arch = "x86_64")]
-pub const NATIVE_TRAMPOLINE_SIZE: usize = amd64::TRAMPOLINE_SIZE;
+pub type NativeRegisterStruct = amd64::Amd64RegisterSnapshot;
+
+#[cfg(target_arch = "x86_64")]
+pub const NATIVE_TRAMPOLINE_SIZE: u64 = amd64::TRAMPOLINE_SIZE as u64;
+
+#[cfg(target_arch = "x86_64")]
+pub const NATIVE_TRAMPOLINE_GEN_DESC: TrampolineGenDesc<{ amd64::TRAMPOLINE_SIZE }> =
+    amd64::TRAMPOLINE_GEN_DESC;
