@@ -3,3 +3,4 @@ artefacts/
 example_bins/
 rtdbglib.json
 crates/rtdbg_wasm/wasm_reference/
+rtdbglib.d.rhai

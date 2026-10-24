@@ -37,6 +37,10 @@ run *args: build
 run_gui: gui
     cargo run --release -p rtdbg_gui
 
+# Generate a .d.rhai file to be consumed by the rhai LSP
+completions:
+    cargo run --example gen_api
+
 # Clean everything
 clean:
     cargo clean

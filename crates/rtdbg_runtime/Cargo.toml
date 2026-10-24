@@ -12,7 +12,7 @@ imep = { workspace = true }
 colog = { workspace = true }
 ctor = { workspace = true }
 log = { workspace = true }
-rhai = { workspace = true, features = ["metadata"] }
+rhai = { workspace = true, features = ["metadata", "internals"] }
 librtdbg = { workspace = true }
 libc = { workspace = true }
 paste = { workspace = true }

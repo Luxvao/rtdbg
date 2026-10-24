@@ -6,9 +6,9 @@
     })
 */
 
-use std::{any::type_name, collections::HashMap};
+use std::collections::HashMap;
 
-use rhai::{Array, EvalAltResult, Map};
+use rhai::{Array, Map};
 
 #[macro_export]
 macro_rules! register_fns {
