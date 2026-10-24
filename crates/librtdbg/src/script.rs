@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use rhai::{AST, CustomType, Dynamic, EvalAltResult, FuncArgs, Position};
+use rhai::{AST, CustomType, Dynamic, EvalAltResult, FnPtr, Position, TypeBuilder};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, CustomType, Hash, PartialEq, Eq)]
@@ -18,10 +18,11 @@ pub struct Script {
 #[derive(Debug, Clone)]
 pub struct ScriptCallback {
     pub script_id: ScriptId,
-    pub callback: String,
+    pub callback: FnPtr,
 }
 
 #[derive(Debug, Clone, CustomType)]
+#[rhai_type(extra = Self::build_extra)]
 pub struct Store {
     inner: Arc<Mutex<HashMap<String, Dynamic>>>,
 }
@@ -33,13 +34,21 @@ pub struct ScriptContext {
 }
 
 impl Store {
+    fn build_extra(builder: &mut TypeBuilder<Self>) {
+        builder
+            .with_fn("get", |s: &mut Store, k: String| Store::get(s, k))
+            .with_fn("set", |s: &mut Store, k: String, v: Dynamic| {
+                Store::set(s, k, v)
+            });
+    }
+
     pub fn new() -> Store {
         Store {
             inner: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
-    pub fn load(&self, key: String) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn get(&self, key: String) -> Result<Dynamic, Box<EvalAltResult>> {
         Ok(self
             .inner
             .lock()
@@ -57,7 +66,7 @@ impl Store {
             .clone())
     }
 
-    pub fn store(&self, key: String, value: Dynamic) -> Result<(), Box<EvalAltResult>> {
+    pub fn set(&self, key: String, value: Dynamic) -> Result<(), Box<EvalAltResult>> {
         self.inner
             .lock()
             .map_err(|e| {

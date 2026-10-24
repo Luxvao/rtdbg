@@ -3,7 +3,7 @@ use std::sync::PoisonError;
 use imp_core::ImportSlot;
 use thiserror::Error;
 
-use crate::hook::ImportId;
+use crate::hook::HookId;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -31,6 +31,8 @@ pub enum Error {
     CannotLoadCStrFromRegister,
     #[error("Storing a CStr to a register is not possible")]
     CannotStoreCStrToRegister,
+    #[error("The provided String is not a valid CString")]
+    InvalidCString,
     #[error("No such script exists")]
     NoSuchScript,
     #[error("HookSpace is in a bad state")]
@@ -51,6 +53,8 @@ pub enum Error {
     SlotChanged(ImportSlot),
     #[error("Clearing the cache has failed")]
     IcacheFlushFailed,
+    #[error("Hook {0:?} does not exist")]
+    NoSuchHook(HookId),
 }
 
 impl<T> From<PoisonError<T>> for Error {

@@ -7,6 +7,7 @@ use std::{
 use librtdbg::api::{Request, Response};
 use log::{error, info};
 use rhai::Dynamic;
+use serde::Deserialize;
 
 use crate::runtime::{load_script, run_function, status, unload_script};
 
@@ -38,8 +39,13 @@ pub fn io() {
 
 fn handle_client(mut stream: UnixStream) {
     loop {
-        let request: Request = match serde_json::from_reader(&stream) {
+        let mut de = serde_json::Deserializer::from_reader(&mut stream);
+
+        let request: Request = match Request::deserialize(&mut de) {
             Ok(r) => r,
+            Err(e) if e.is_eof() => {
+                break;
+            }
             Err(e) => {
                 let resp = Response::Error(e.to_string());
 

@@ -12,7 +12,7 @@ use librtdbg::{
     script::{Script, ScriptCallback, ScriptContext, ScriptId, Store},
 };
 use log::{info, warn};
-use rhai::{Dynamic, Engine, FuncArgs, Scope, packages::Package};
+use rhai::{Array, Dynamic, Engine, FnPtr, FuncArgs, Map, Scope, packages::Package};
 
 use crate::rhai_lib::RTDBG_PACKAGE;
 
@@ -30,10 +30,6 @@ pub fn runtime() {
 
     // Display the PID of this process
     info!("PID: {}", std::process::id());
-
-    loop {
-        todo!()
-    }
 }
 
 pub fn load_script(script: String) -> Result<ScriptId, Error> {
@@ -68,20 +64,19 @@ pub fn load_script(script: String) -> Result<ScriptId, Error> {
 }
 
 pub fn unload_script(script_id: ScriptId) -> Result<(), Error> {
-    if let None = SCRIPT_STORAGE.lock()?.remove(&script_id) {
+    if SCRIPT_STORAGE.lock()?.remove(&script_id).is_none() {
         return Err(Error::NoSuchScript);
     }
 
     Ok(())
 }
 
-pub fn run_function<T: Clone + Send + Sync + 'static, P: FuncArgs>(
+pub fn run_fn_ptr<T: Clone + Send + Sync + 'static, P: FuncArgs>(
     script_id: ScriptId,
-    function: &str,
+    fn_ptr: &FnPtr,
     args: P,
 ) -> Result<T, Error> {
     let mut engine = Engine::new_raw();
-    let mut scope = Scope::new();
 
     RTDBG_PACKAGE.register_into_engine(&mut engine);
 
@@ -102,12 +97,20 @@ pub fn run_function<T: Clone + Send + Sync + 'static, P: FuncArgs>(
         new_args.push(Dynamic::from(global_store));
         args.parse(&mut new_args);
 
-        return engine
-            .call_fn(&mut scope, &script.ast, function, new_args)
+        return fn_ptr
+            .call(&engine, &script.ast, new_args)
             .map_err(|e| e.into());
     }
 
     Err(Error::NoSuchScript)
+}
+
+pub fn run_function<T: Clone + Send + Sync + 'static, P: FuncArgs>(
+    script_id: ScriptId,
+    function: &str,
+    args: P,
+) -> Result<T, Error> {
+    run_fn_ptr(script_id, &FnPtr::new(function).map_err(Error::from)?, args)
 }
 
 pub fn status() -> Result<Vec<ScriptId>, Error> {
@@ -123,16 +126,65 @@ pub fn rhai_dispatcher(
         return;
     };
 
-    let Some(script_callback) = rhai_hook_callbacks_guard.get(&hook_id).map(|i| i.clone()) else {
+    let Some(script_callback) = rhai_hook_callbacks_guard.get(&hook_id).cloned() else {
         warn!("No rhai callback associated with {hook_id:?}, skipping!");
         return;
     };
 
     drop(rhai_hook_callbacks_guard);
 
-    // match parameters {
-    // Either::First(vec) => run_function(script_callback.script_id, &script_callback.callback, (vec,)),
-    // Either::Second(map) =>
-    // }
-    todo!()
+    match parameters {
+        Either::First(vec) => {
+            let vec_cloned = vec.iter().map(|i| Dynamic::from(i.clone())).collect();
+
+            let Ok(return_parameters_vec) = run_fn_ptr::<Array, (Array,)>(
+                script_callback.script_id,
+                &script_callback.callback,
+                (vec_cloned,),
+            ) else {
+                warn!("Script callback {script_callback:?} did not return an Array of Parameter!");
+                return;
+            };
+
+            *vec = match return_parameters_vec
+                .into_iter()
+                .map(|i| i.try_cast::<Parameter>())
+                .collect::<Option<Vec<Parameter>>>()
+            {
+                Some(vec) => vec,
+                None => {
+                    warn!(
+                        "Script callback {script_callback:?} did not return an Array of Parameter!"
+                    );
+                    return;
+                }
+            };
+        }
+        Either::Second(hashmap) => {
+            let map_cloned = hashmap
+                .iter()
+                .map(|(k, v)| (k.into(), Dynamic::from(v.clone())))
+                .collect::<Map>();
+
+            let Ok(return_parameters_map) = run_fn_ptr::<Map, (Map,)>(
+                script_callback.script_id,
+                &script_callback.callback,
+                (map_cloned,),
+            ) else {
+                warn!("Script callback {script_callback:?} did not return a Map!");
+                return;
+            };
+
+            let Some(return_parameter_hashmap) = return_parameters_map
+                .into_iter()
+                .map(|(k, v)| Some((k.into(), v.try_cast::<Parameter>()?)))
+                .collect::<Option<HashMap<String, Parameter>>>()
+            else {
+                warn!("Script callback {script_callback:?} did not return a Map of Parameters!");
+                return;
+            };
+
+            *hashmap = return_parameter_hashmap;
+        }
+    };
 }

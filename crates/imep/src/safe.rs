@@ -548,6 +548,14 @@ impl Endianness {
     };
 }
 
+impl Machine {
+    pub const NATIVE: Machine = if cfg!(target_arch = "x86_64") {
+        Machine::X86_64
+    } else {
+        todo!()
+    };
+}
+
 impl ProgramFlags {
     pub const X: u32 = 0x1;
     pub const W: u32 = 0x2;

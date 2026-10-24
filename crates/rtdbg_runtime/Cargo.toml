@@ -17,3 +17,4 @@ librtdbg = { workspace = true }
 libc = { workspace = true }
 paste = { workspace = true }
 serde_json = { workspace = true }
+serde = { workspace = true }

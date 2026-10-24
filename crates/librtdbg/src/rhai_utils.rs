@@ -6,6 +6,10 @@
     })
 */
 
+use std::{any::type_name, collections::HashMap};
+
+use rhai::{Array, EvalAltResult, Map};
+
 #[macro_export]
 macro_rules! register_fns {
     ($engine:expr, {$($name:expr => $handler:ident),+}) => {
@@ -25,7 +29,7 @@ macro_rules! register_types {
 }
 
 #[macro_export]
-macro_rules! register_enums {
+macro_rules! register_modules {
     ($engine:expr, {$($enum:ident),+}) => {
         $(
             paste! {
@@ -50,8 +54,8 @@ macro_rules! register_const {
 #[macro_export]
 macro_rules! create_enum_module {
     ($enum:ident => $($variant:ident),+) => {
-        paste! {
-            #[export_module]
+        paste::paste! {
+            #[rhai::export_module]
             pub mod [<$enum:lower _module>] {
                 $(
                     #[allow(non_upper_case_globals)]
@@ -60,4 +64,18 @@ macro_rules! create_enum_module {
             }
         }
     };
+}
+
+pub fn parse_array<T: 'static>(value: Array) -> Option<Vec<T>> {
+    value
+        .into_iter()
+        .map(|v| v.try_cast::<T>())
+        .collect::<Option<Vec<T>>>()
+}
+
+pub fn parse_map<T: 'static>(value: Map) -> Option<HashMap<String, T>> {
+    value
+        .into_iter()
+        .map(|(v, k)| Some((v.into(), k.try_cast::<T>()?)))
+        .collect::<Option<HashMap<String, T>>>()
 }

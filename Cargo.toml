@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/rtdbg_runtime", "crates/librtdbg", "crates/example_target", "crates/rtdbg_wasm", "crates/imp_core", "crates/imep"]
+members = ["crates/rtdbg_runtime", "crates/librtdbg", "crates/example_target", "crates/rtdbg_wasm", "crates/imp_core", "crates/imep", "crates/rtdbg"]
 
 [workspace.dependencies]
 colog = "1.4.0"

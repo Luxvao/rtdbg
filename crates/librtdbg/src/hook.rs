@@ -13,12 +13,13 @@ use libc::{
     _SC_PAGESIZE, MAP_ANONYMOUS, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE, mmap, sysconf,
 };
 use log::warn;
-use rhai::CustomType;
+use rhai::{CustomType, TypeBuilder};
 
 use crate::{
     ID_GEN,
     arch::{self, TrampolineGenDesc},
     bits::Bits,
+    create_enum_module,
     either::Either,
     error::Error,
     parameter::Parameter,
@@ -40,7 +41,7 @@ pub fn generate_trampoline<const SIZE: usize>(
 ) -> [u8; SIZE] {
     let function_id = import_id.0.to_ne_bytes();
     #[allow(function_casts_as_integer)]
-    let dispatcher_address = (dispatcher as u64).to_ne_bytes();
+    let dispatcher_address = (dispatcher as usize).to_ne_bytes();
     let original_function = original_function.to_ne_bytes();
 
     let mut modified_trampoline = *tgd.trampoline_src;
@@ -86,7 +87,7 @@ pub struct ImportCtx {
     import_id: ImportId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, CustomType)]
 pub struct ImportId(u64);
 
 pub type HookCallback = fn(HookId, Either<&mut Vec<Parameter>, &mut HashMap<String, Parameter>>);
@@ -120,7 +121,10 @@ pub enum HookStatus {
     Inactive,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
+create_enum_module!(HookStatus => Active, Inactive);
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, CustomType)]
+#[rhai_type(extra = Self::build_extra)]
 pub struct HookPriority(u64);
 
 impl TrampolineAllocator {
@@ -188,7 +192,7 @@ impl TrampolineAllocator {
         let ptr = ptr as u64;
 
         for (bitmap, ptr_s) in self.pages.iter_mut() {
-            let ptr_base = *ptr_s as u64;
+            let ptr_base = *ptr_s;
 
             if ptr_base <= ptr && ptr < ptr_base + self.page_size {
                 // If we're here then this is the page that contains that particular pointer
@@ -201,6 +205,12 @@ impl TrampolineAllocator {
         }
 
         Ok(())
+    }
+}
+
+impl HookPriority {
+    fn build_extra(builder: &mut TypeBuilder<Self>) {
+        builder.with_fn("HookPriority", |v: i64| HookPriority(v as u64));
     }
 }
 
@@ -308,8 +318,8 @@ extern "C" fn dispatcher(
     original_return
 }
 
-pub fn is_patched(import_slot: &ImportSlot) -> Result<bool, Error> {
-    Ok(PATCHES.lock()?.contains_key(import_slot))
+pub fn get_import_id(import_slot: &ImportSlot) -> Result<Option<ImportId>, Error> {
+    Ok(PATCHES.lock()?.get(import_slot).map(|i| i.import_id))
 }
 
 // Patch import entry
@@ -471,4 +481,28 @@ pub fn detach_hook(hook_id: HookId) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+pub fn set_hook_status(hook_id: HookId, status: HookStatus) -> Result<(), Error> {
+    let mut hooks_guard = HOOKS.lock()?;
+
+    let Some(hook_mgr) = hooks_guard.get_mut(&hook_id.associated_import) else {
+        return Err(Error::NoSuchHook(hook_id));
+    };
+
+    for prefix_hook in hook_mgr.prefix.iter_mut() {
+        if prefix_hook.id == hook_id {
+            prefix_hook.status = status;
+            return Ok(());
+        }
+    }
+
+    for postfix_hook in hook_mgr.postfix.iter_mut() {
+        if postfix_hook.id == hook_id {
+            postfix_hook.status = status;
+            return Ok(());
+        }
+    }
+
+    Err(Error::NoSuchHook(hook_id))
 }

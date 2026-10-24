@@ -3,7 +3,7 @@ use std::{
     ffi::{CStr, CString},
 };
 
-use rhai::{CustomType, export_module};
+use rhai::{CustomType, TypeBuilder, export_module};
 
 use crate::{
     error::Error,
@@ -24,7 +24,7 @@ pub enum ParameterValue {
     I64(Option<i64>),
     F32(Option<f32>),
     F64(Option<f64>),
-    CStr(Option<CString>),
+    CStr(Option<String>),
     Ptr(Option<u64>, Vec<Parameter>),
     // I love this
     NamedPtr(Option<u64>, HashMap<String, Parameter>),
@@ -39,12 +39,19 @@ pub enum ParameterLocation {
 }
 
 #[derive(Debug, Clone, PartialEq, CustomType)]
+#[rhai_type(extra = Self::build_extra)]
 pub struct Parameter {
     pub location: ParameterLocation,
     pub value: ParameterValue,
 }
 
 impl Parameter {
+    fn build_extra(builder: &mut TypeBuilder<Self>) {
+        builder
+            .on_print(|v| format!("{v:?}"))
+            .on_debug(|v| format!("{v:?}"));
+    }
+
     pub fn try_resolve<R: RegisterSnapshot>(
         &mut self,
         register_snapshot: &R,
@@ -82,7 +89,11 @@ impl Parameter {
                 *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
             }
             ParameterValue::CStr(v) => {
-                *v = Some(Self::acquire_cstr(&self.location, base)?.to_owned())
+                *v = Some(
+                    Self::acquire_cstr(&self.location, base)?
+                        .to_string_lossy()
+                        .into_owned(),
+                )
             }
             ParameterValue::Ptr(v, parameters) => {
                 let new_base = Self::acquire_value(&self.location, register_snapshot, base);
@@ -154,8 +165,10 @@ impl Parameter {
             ParameterValue::F64(Some(v)) => {
                 Self::commit_value(v.to_bits(), &self.location, register_snapshot, base);
             }
-            ParameterValue::CStr(Some(cstring)) => {
-                Self::commit_cstr(cstring, &self.location, base)?;
+            ParameterValue::CStr(Some(string)) => {
+                let cstring = CString::new(string.clone()).map_err(|_| Error::InvalidCString)?;
+
+                Self::commit_cstr(&cstring, &self.location, base)?;
             }
             ParameterValue::Ptr(addy, parameters) => {
                 // We first construct, and only after do we write the pointer
@@ -240,10 +253,23 @@ impl Parameter {
     }
 }
 
+// Expose Parameter::create() to rhai
+#[export_module]
+pub mod parameter_module {
+    use crate::parameter::{Parameter, ParameterLocation, ParameterValue};
+
+    #[rhai_fn(name = "create")]
+    pub fn create(location: ParameterLocation, value: ParameterValue) -> Parameter {
+        Parameter { location, value }
+    }
+}
+
 // To make the `ParameterValue` enum work properly
 #[export_module]
 pub mod parametervalue_module {
-    use rhai::{Dynamic, EvalAltResult, Map};
+    use rhai::{Array, Dynamic, EvalAltResult, Map};
+
+    use crate::rhai_utils::{parse_array, parse_map};
 
     // Convenience
     #[rhai_fn(global, get = "enum_type", pure)]
@@ -279,7 +305,7 @@ pub mod parametervalue_module {
             ParameterValue::I64(Some(v)) => Dynamic::from(*v),
             ParameterValue::F32(Some(v)) => Dynamic::from(*v),
             ParameterValue::F64(Some(v)) => Dynamic::from(*v),
-            ParameterValue::CStr(Some(v)) => Dynamic::from(v.to_string_lossy().into_owned()),
+            ParameterValue::CStr(Some(v)) => Dynamic::from(v.clone()),
             ParameterValue::Ptr(Some(v), _) => Dynamic::from(*v),
             ParameterValue::NamedPtr(Some(v), _) => Dynamic::from(*v),
             _ => Dynamic::UNIT,
@@ -374,36 +400,31 @@ pub mod parametervalue_module {
 
     #[rhai_fn(name = "CStr", return_raw)]
     pub fn cstr_val(value: String) -> Result<ParameterValue, Box<EvalAltResult>> {
-        Ok(ParameterValue::CStr(Some(
-            CString::new(value).map_err(|e| e.to_string())?,
-        )))
+        Ok(ParameterValue::CStr(Some(value)))
     }
 
-    #[rhai_fn(name = "Ptr")]
-    pub fn ptr_no_addy(to_what: Vec<Parameter>) -> ParameterValue {
-        ParameterValue::Ptr(None, to_what)
+    #[rhai_fn(name = "Ptr", return_raw)]
+    pub fn ptr_no_addy(to_what: Array) -> Result<ParameterValue, Box<EvalAltResult>> {
+        Ok(ParameterValue::Ptr(
+            None,
+            parse_array(to_what).ok_or("Array was not of type Parameter")?,
+        ))
     }
 
-    #[rhai_fn(name = "Ptr")]
-    pub fn ptr_with_addy(addy: i64, to_what: Vec<Parameter>) -> ParameterValue {
-        ParameterValue::Ptr(Some(addy as u64), to_what)
+    #[rhai_fn(name = "Ptr", return_raw)]
+    pub fn ptr_with_addy(addy: i64, to_what: Array) -> Result<ParameterValue, Box<EvalAltResult>> {
+        Ok(ParameterValue::Ptr(
+            Some(addy as u64),
+            parse_array(to_what).ok_or("Array was not of type Parameter")?,
+        ))
     }
 
     #[rhai_fn(name = "NamedPtr", return_raw)]
     pub fn named_ptr_no_addy(to_what: Map) -> Result<ParameterValue, Box<EvalAltResult>> {
-        let map = to_what
-            .into_iter()
-            .map(|(key, value)| {
-                Ok((
-                    key.to_string(),
-                    value
-                        .try_cast::<Parameter>()
-                        .ok_or(Box::new(EvalAltResult::from("NamedPtr must take a Map!")))?,
-                ))
-            })
-            .collect::<Result<HashMap<String, Parameter>, Box<EvalAltResult>>>()?;
-
-        Ok(ParameterValue::NamedPtr(None, map))
+        Ok(ParameterValue::NamedPtr(
+            None,
+            parse_map(to_what).ok_or("Map was not of type <String, Parameter>!")?,
+        ))
     }
 
     #[rhai_fn(name = "NamedPtr", return_raw)]
@@ -411,19 +432,10 @@ pub mod parametervalue_module {
         addy: i64,
         to_what: Map,
     ) -> Result<ParameterValue, Box<EvalAltResult>> {
-        let map = to_what
-            .into_iter()
-            .map(|(key, value)| {
-                Ok((
-                    key.to_string(),
-                    value
-                        .try_cast::<Parameter>()
-                        .ok_or(Box::new(EvalAltResult::from("NamedPtr must take a Map!")))?,
-                ))
-            })
-            .collect::<Result<HashMap<String, Parameter>, Box<EvalAltResult>>>()?;
-
-        Ok(ParameterValue::NamedPtr(Some(addy as u64), map))
+        Ok(ParameterValue::NamedPtr(
+            Some(addy as u64),
+            parse_map(to_what).ok_or("Map was not of type <String, Parameter>!")?,
+        ))
     }
 }
 

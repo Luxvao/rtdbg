@@ -7,7 +7,11 @@ setup:
     mkdir -p artefacts
 
 # Build everything
-build: assemble launcher gui
+build: assemble launcher
+
+# Builds a specific C example
+build_c_example example:
+    clang -o ./artefacts/{{example}} ./c_examples/{{example}}.c
 
 # Build runtime
 runtime:
@@ -26,8 +30,8 @@ gui: runtime
     cargo build --release -p rtdbg_gui
 
 # Run the main binary, passing the parameters
-run: build
-    cargo run --release -p rtdbg
+run *args: build
+    cargo run --release -p rtdbg -- {{args}}
 
 # Run the main GUI app
 run_gui: gui

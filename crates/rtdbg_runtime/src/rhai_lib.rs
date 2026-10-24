@@ -1,26 +1,36 @@
-use std::{os::raw::c_void, sync::LazyLock};
+use std::{collections::HashMap, os::raw::c_void, sync::LazyLock};
 
 use imep::{
     Class, ElfHeader, ElfRel, ElfRela, ElfSym, ElfType, Endianness, Machine, OsAbi, ProgramHeader,
-    ProgramType, RelocType, enum_rhai_impl::*,
+    ProgramType, RelocType,
+    enum_rhai_impl::*,
+    parser::{ElfParser, Libc, ParseInfo},
 };
+use imp_core::{ImportSlot, Parser};
 use paste::paste;
 
 use librtdbg::{
     arch::amd64::Amd64RegisterSnapshot,
+    either::Either,
+    hook::{
+        self, HookId, HookPriority, HookStatus, ImportId, attach_hook, hookstatus_module,
+        patch_import,
+    },
     parameter::{
-        Parameter, ParameterLocation, ParameterValue, parameterlocation_module,
+        Parameter, ParameterLocation, ParameterValue, parameter_module, parameterlocation_module,
         parametervalue_module,
     },
     proc_utils::{Permissions, Process, Vma, Vmas},
     register::{Register, register_module},
-    register_enums, register_types,
-    script::Store,
+    register_modules, register_types,
+    script::{ScriptCallback, ScriptId, Store},
 };
 use rhai::{
-    Engine, EvalAltResult, FuncRegistration, def_package, exported_module,
-    packages::StandardPackage,
+    Array, Dynamic, Engine, EvalAltResult, FnPtr, FuncRegistration, Map, def_package,
+    exported_module, packages::StandardPackage,
 };
+
+use crate::runtime::{RHAI_HOOK_CALLBACKS, rhai_dispatcher};
 
 pub static RTDBG_PACKAGE: LazyLock<RtdbgPackage> = LazyLock::new(RtdbgPackage::new);
 
@@ -35,6 +45,15 @@ def_package! {
         FuncRegistration::new("write_mem").set_into_module(module, write_mem_string);
         FuncRegistration::new("mprotect").set_into_module(module, mprotect_rhai);
 
+        // Hooks and stuff
+        FuncRegistration::new("get_import_slots").set_into_module(module, get_import_slots);
+        FuncRegistration::new("set_hook_status").set_into_module(module, set_hook_status);
+        FuncRegistration::new("attach_hook").set_into_module(module, attach_hook_import_id_vec);
+        FuncRegistration::new("attach_hook").set_into_module(module, attach_hook_import_id_map);
+        FuncRegistration::new("attach_hook").set_into_module(module, attach_hook_import_slot_vec);
+        FuncRegistration::new("attach_hook").set_into_module(module, attach_hook_import_slot_map);
+        FuncRegistration::new("detach_hook").set_into_module(module, detach_hook);
+
         // Constants
         module.set_var("PROT_NONE", libc::PROT_NONE);
         module.set_var("PROT_READ", libc::PROT_READ);
@@ -43,17 +62,22 @@ def_package! {
         module.set_var("PROT_GROWSUP", libc::PROT_GROWSUP);
         module.set_var("PROT_GROWSDOWN", libc::PROT_GROWSDOWN);
     } |> |engine| {
+        engine.on_print(|s| println!("{s}"));
+        engine.on_debug(|s, source, pos| {
+            println!("{source:?} @ {pos:?}: {s}");
+        });
+
         setup_types(engine);
-        setup_enums(engine);
+        setup_modules(engine);
     }
 }
 
 pub fn setup_types(engine: &mut Engine) {
-    register_types!(engine, { Permissions, Vma, Vmas, Process, ElfHeader, ProgramHeader, ElfSym, ElfRel, ElfRela, Store, Amd64RegisterSnapshot, Parameter });
+    register_types!(engine, { Permissions, Vma, Vmas, Process, ImportSlot, ElfHeader, ProgramHeader, ElfSym, ElfRel, ElfRela, Store, Amd64RegisterSnapshot, ImportId, HookId, HookPriority, Parameter });
 }
 
-pub fn setup_enums(engine: &mut Engine) {
-    register_enums!(engine, { Class, Endianness, OsAbi, ElfType, Machine, ProgramType, RelocType, Register, ParameterValue, ParameterLocation });
+pub fn setup_modules(engine: &mut Engine) {
+    register_modules!(engine, { Class, Endianness, OsAbi, ElfType, Machine, ProgramType, RelocType, Register, HookStatus, ParameterValue, ParameterLocation, Parameter });
 }
 
 // Get process info
@@ -73,8 +97,7 @@ fn get_elf_header() -> Result<ElfHeader, Box<EvalAltResult>> {
     let header_address = proc_info
         .vmas
         .iter()
-        .filter(|vma| vma.path.eq(&Some(proc_info.path.clone())) && vma.offset == 0)
-        .next()
+        .find(|vma| vma.path.eq(&Some(proc_info.path.clone())) && vma.offset == 0)
         .ok_or("Unable to find ELF header")?
         .saddy;
 
@@ -132,4 +155,210 @@ fn mprotect_rhai(addy: i64, size: i64, prot: i32) -> i64 {
             prot,
         ))
     }
+}
+
+// Get every import slot for all modules to then match on
+fn get_import_slots() -> Dynamic {
+    // Hardcode imep for now
+    let parse_info = ParseInfo::new(
+        Libc::COMPILED_WITH,
+        Class::NATIVE,
+        Endianness::NATIVE,
+        Machine::NATIVE,
+    );
+
+    Dynamic::from_array(
+        ElfParser::import_slots(parse_info)
+            .map(|i| Dynamic::from(i))
+            .collect(),
+    )
+}
+
+// Translate an ImportSlot into an ImportId
+fn get_import_id(import_slot: ImportSlot) -> Result<ImportId, Box<EvalAltResult>> {
+    if let Some(id) = hook::get_import_id(&import_slot).map_err(|e| e.to_string())? {
+        return Ok(id);
+    }
+
+    patch_import(None, import_slot).map_err(|e| e.to_string().into())
+}
+
+// Generic ImportId-based attach; internal, called by dedicated functions for the Either variants
+fn attach_hook_import_id_generic(
+    import_id: ImportId,
+    prefix: bool,
+    status: HookStatus,
+    priority: HookPriority,
+    parameters: Either<Vec<Parameter>, HashMap<String, Parameter>>,
+    script_id: ScriptId,
+    callback: FnPtr,
+) -> Result<HookId, Box<EvalAltResult>> {
+    let script_callback = ScriptCallback {
+        script_id,
+        callback,
+    };
+
+    // We register it inactive to make sure it's not actually hit untill we set up the glue
+    let hook_id = attach_hook(
+        import_id,
+        prefix,
+        HookStatus::Inactive,
+        priority,
+        parameters,
+        rhai_dispatcher,
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Now we actually make our runtime aware of the association
+    RHAI_HOOK_CALLBACKS
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(hook_id, script_callback);
+
+    // If they want it active, we set it to active
+    if let HookStatus::Active = status {
+        set_hook_status(hook_id, HookStatus::Active).map_err(|e| e.to_string())?;
+    }
+
+    Ok(hook_id)
+}
+
+// Generic ImportSlot-based attach. It automatically patches if needed, so it's a single call
+fn attach_hook_import_slot_generic(
+    import_slot: ImportSlot,
+    prefix: bool,
+    status: HookStatus,
+    priority: HookPriority,
+    parameters: Either<Vec<Parameter>, HashMap<String, Parameter>>,
+    script_id: ScriptId,
+    callback: FnPtr,
+) -> Result<HookId, Box<EvalAltResult>> {
+    let import_id = get_import_id(import_slot)?;
+
+    attach_hook_import_id_generic(
+        import_id, prefix, status, priority, parameters, script_id, callback,
+    )
+}
+
+fn attach_hook_import_id_vec(
+    import_id: ImportId,
+    prefix: bool,
+    status: HookStatus,
+    priority: HookPriority,
+    parameters: Array,
+    script_id: ScriptId,
+    callback: FnPtr,
+) -> Result<HookId, Box<EvalAltResult>> {
+    attach_hook_import_id_generic(
+        import_id,
+        prefix,
+        status,
+        priority,
+        Either::First(
+            parameters
+                .into_iter()
+                .map(|i| Some(i.try_cast::<Parameter>()?))
+                .collect::<Option<Vec<Parameter>>>()
+                .ok_or("Parameters must be an array of type Parameter!")?,
+        ),
+        script_id,
+        callback,
+    )
+}
+
+fn attach_hook_import_id_map(
+    import_id: ImportId,
+    prefix: bool,
+    status: HookStatus,
+    priority: HookPriority,
+    parameters: Map,
+    script_id: ScriptId,
+    callback: FnPtr,
+) -> Result<HookId, Box<EvalAltResult>> {
+    attach_hook_import_id_generic(
+        import_id,
+        prefix,
+        status,
+        priority,
+        Either::Second(
+            parameters
+                .into_iter()
+                .map(|(k, v)| Some((k.to_string(), v.try_cast::<Parameter>()?)))
+                .collect::<Option<HashMap<String, Parameter>>>()
+                .ok_or("Parameters must be a Map of Parameter!")?,
+        ),
+        script_id,
+        callback,
+    )
+}
+
+fn attach_hook_import_slot_vec(
+    import_slot: ImportSlot,
+    prefix: bool,
+    status: HookStatus,
+    priority: HookPriority,
+    parameters: Array,
+    script_id: ScriptId,
+    callback: FnPtr,
+) -> Result<HookId, Box<EvalAltResult>> {
+    attach_hook_import_slot_generic(
+        import_slot,
+        prefix,
+        status,
+        priority,
+        Either::First(
+            parameters
+                .into_iter()
+                .map(|i| Some(i.try_cast::<Parameter>()?))
+                .collect::<Option<Vec<Parameter>>>()
+                .ok_or("Parameters must be an array of type Parameter!")?,
+        ),
+        script_id,
+        callback,
+    )
+}
+
+fn attach_hook_import_slot_map(
+    import_slot: ImportSlot,
+    prefix: bool,
+    status: HookStatus,
+    priority: HookPriority,
+    parameters: Map,
+    script_id: ScriptId,
+    callback: FnPtr,
+) -> Result<HookId, Box<EvalAltResult>> {
+    attach_hook_import_slot_generic(
+        import_slot,
+        prefix,
+        status,
+        priority,
+        Either::Second(
+            parameters
+                .into_iter()
+                .map(|(k, v)| Some((k.to_string(), v.try_cast::<Parameter>()?)))
+                .collect::<Option<HashMap<String, Parameter>>>()
+                .ok_or("Parameters must be a Map of Parameter!")?,
+        ),
+        script_id,
+        callback,
+    )
+}
+
+// Helper to detach a hook completely
+fn detach_hook(hook_id: HookId) -> Result<(), Box<EvalAltResult>> {
+    hook::detach_hook(hook_id).map_err(|e| e.to_string())?;
+
+    RHAI_HOOK_CALLBACKS
+        .lock()
+        .map_err(|e| e.to_string())?
+        .remove(&hook_id);
+
+    Ok(())
+}
+
+// Helper for setting the status of a hook
+fn set_hook_status(hook_id: HookId, status: HookStatus) -> Result<(), Box<EvalAltResult>> {
+    hook::set_hook_status(hook_id, status).map_err(|e| e.to_string())?;
+
+    Ok(())
 }

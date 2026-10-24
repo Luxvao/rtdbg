@@ -219,8 +219,8 @@ extern "C" fn phdr_callback(info: *mut dl_phdr_info, _: size_t, data: *mut c_voi
                 };
 
                 slots.push(ImportSlot {
-                    function: symbol,
-                    module: module_name.clone(),
+                    import_name: symbol,
+                    module_name: module_name.clone(),
                     ptr: address,
                 });
             }
@@ -261,8 +261,8 @@ extern "C" fn phdr_callback(info: *mut dl_phdr_info, _: size_t, data: *mut c_voi
                 };
 
                 slots.push(ImportSlot {
-                    function: symbol,
-                    module: module_name.clone(),
+                    import_name: symbol,
+                    module_name: module_name.clone(),
                     ptr: address,
                 });
             }
@@ -292,7 +292,7 @@ extern "C" fn phdr_callback(info: *mut dl_phdr_info, _: size_t, data: *mut c_voi
 
                 let symbol_entry = unsafe {
                     ElfSym::parse_at(
-                        symtab + rela_entry.symbol_index as u64,
+                        symtab + rela_entry.symbol_index as u64 * sym_size as u64,
                         parse_info.class,
                         parse_info.endianness,
                     )
@@ -305,8 +305,8 @@ extern "C" fn phdr_callback(info: *mut dl_phdr_info, _: size_t, data: *mut c_voi
                 };
 
                 slots.push(ImportSlot {
-                    function: symbol,
-                    module: module_name.clone(),
+                    import_name: symbol,
+                    module_name: module_name.clone(),
                     ptr: address,
                 });
             }
