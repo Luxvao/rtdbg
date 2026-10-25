@@ -7,7 +7,7 @@ use librtdbg::{
     ID_GEN,
     either::Either,
     error::Error,
-    hook::HookId,
+    hook::{HookId, detach_hook},
     parameter::Parameter,
     script::{Script, ScriptCallback, ScriptContext, ScriptId, Store},
 };
@@ -64,6 +64,21 @@ pub fn load_script(script: String) -> Result<ScriptId, Error> {
 }
 
 pub fn unload_script(script_id: ScriptId) -> Result<(), Error> {
+    let mut rhai_hook_callback_lock = RHAI_HOOK_CALLBACKS.lock()?;
+
+    // If it has hooks associated with it, remove them
+    rhai_hook_callback_lock.retain(|k, v| {
+        if v.script_id == script_id {
+            if let Err(e) = detach_hook(*k) {
+                warn!("Unable to detach hook {k:?} associated with {v:?}! Error: {e:?}");
+            }
+
+            return false;
+        }
+
+        true
+    });
+
     if SCRIPT_STORAGE.lock()?.remove(&script_id).is_none() {
         return Err(Error::NoSuchScript);
     }

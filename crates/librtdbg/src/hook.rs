@@ -47,7 +47,7 @@ pub fn generate_trampoline<const SIZE: usize>(
     let mut modified_trampoline = *tgd.trampoline_src;
 
     for (i, b) in function_id.iter().enumerate() {
-        modified_trampoline[tgd.function_id_offset as usize + i] = *b;
+        modified_trampoline[tgd.import_id_offset as usize + i] = *b;
     }
 
     for (i, b) in dispatcher_address.iter().enumerate() {
@@ -114,6 +114,14 @@ pub struct HookCtx {
     pub parameters: Either<Vec<Parameter>, HashMap<String, Parameter>>,
     pub callback: HookCallback,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum HookPhase {
+    Prefix,
+    Postfix,
+}
+
+create_enum_module!(HookPhase => Prefix, Postfix);
 
 #[derive(Debug, Clone, Copy)]
 pub enum HookStatus {
@@ -215,21 +223,21 @@ impl HookPriority {
 }
 
 thread_local! {
-    static RETURN_ADRESSES: RefCell<HashMap<u64, u64>> = RefCell::new(HashMap::new());
+    static RETURN_ADDRESSES: RefCell<HashMap<usize, usize>> = RefCell::new(HashMap::new());
 }
 
 extern "C" fn dispatcher(
-    import_id: u64,
+    import_id: usize,
     is_prefix: bool,
-    register_snapshot: u64,
-    original_return: u64,
-    return_slot_address: u64,
-) -> u64 {
+    register_snapshot: *const arch::NativeRegisterStruct,
+    original_return: usize,
+    return_slot_address: usize,
+) -> usize {
     let original_return = if is_prefix {
-        RETURN_ADRESSES.with_borrow_mut(|v| v.insert(return_slot_address, original_return));
+        RETURN_ADDRESSES.with_borrow_mut(|v| v.insert(return_slot_address, original_return));
         0
     } else {
-        RETURN_ADRESSES.with_borrow_mut(|v| {
+        RETURN_ADDRESSES.with_borrow_mut(|v| {
             *v.get(&return_slot_address).unwrap_or_else(|| {
                 warn!("[HOOK DISPATCHER] Postfix hook hit but no return address available!");
                 &0
@@ -239,9 +247,9 @@ extern "C" fn dispatcher(
 
     let reg_snapshot = unsafe { &mut *(register_snapshot as *mut arch::NativeRegisterStruct) };
 
-    let stack_base = register_snapshot + size_of_val(reg_snapshot) as u64;
+    let stack_base = register_snapshot as usize + size_of_val(reg_snapshot);
 
-    let import_id = ImportId(import_id);
+    let import_id = ImportId(import_id as u64);
 
     let hm_guard = match HOOKS.lock() {
         Ok(g) => g,
@@ -277,7 +285,7 @@ extern "C" fn dispatcher(
         match &mut ctx.parameters {
             Either::First(vec) => {
                 for parameter in vec.iter_mut() {
-                    if let Err(e) = parameter.try_resolve(reg_snapshot, stack_base) {
+                    if let Err(e) = parameter.try_resolve(reg_snapshot, stack_base as u64) {
                         warn!("[HOOK DISPATCHER] Hook {id:?} encountered error: {e}");
                         continue 'hooks;
                     }
@@ -285,7 +293,7 @@ extern "C" fn dispatcher(
             }
             Either::Second(map) => {
                 for parameter in map.values_mut() {
-                    if let Err(e) = parameter.try_resolve(reg_snapshot, stack_base) {
+                    if let Err(e) = parameter.try_resolve(reg_snapshot, stack_base as u64) {
                         warn!("[HOOK DISPATCHER] Hook {id:?} encountered error: {e}");
                         continue 'hooks;
                     }
@@ -298,7 +306,7 @@ extern "C" fn dispatcher(
         match &ctx.parameters {
             Either::First(vec) => {
                 for parameter in vec.iter() {
-                    if let Err(e) = parameter.try_commit(reg_snapshot, stack_base) {
+                    if let Err(e) = parameter.try_commit(reg_snapshot, stack_base as u64) {
                         warn!("[HOOK DISPATCHER] Hook {id:?} encountered error: {e}");
                         continue 'hooks;
                     }
@@ -306,7 +314,7 @@ extern "C" fn dispatcher(
             }
             Either::Second(map) => {
                 for parameter in map.values() {
-                    if let Err(e) = parameter.try_commit(reg_snapshot, stack_base) {
+                    if let Err(e) = parameter.try_commit(reg_snapshot, stack_base as u64) {
                         warn!("[HOOK DISPATCHER] Hook {id:?} encountered error: {e}");
                         continue 'hooks;
                     }
@@ -424,7 +432,7 @@ pub fn unpatch_import(import_slot: ImportSlot) -> Result<ImportId, Error> {
 
 pub fn attach_hook(
     import_id: ImportId,
-    prefix: bool,
+    phase: HookPhase,
     status: HookStatus,
     priority: HookPriority,
     parameters: Either<Vec<Parameter>, HashMap<String, Parameter>>,
@@ -441,10 +449,9 @@ pub fn attach_hook(
         associated_import: import_id,
     };
 
-    let list = if prefix {
-        &mut hook_mgr.prefix
-    } else {
-        &mut hook_mgr.postfix
+    let list = match phase {
+        HookPhase::Prefix => &mut hook_mgr.prefix,
+        HookPhase::Postfix => &mut hook_mgr.postfix,
     };
 
     let pos = list.partition_point(|existing| existing.priority <= priority);

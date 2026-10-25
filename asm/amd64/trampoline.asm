@@ -58,6 +58,10 @@ trampoline:
         ;; dispatcher call
         call qword [dispatcher_address]
 
+        ;; if we get back -1 (u64::MAX; technically usize::MAX but here it's u64)
+        cmp rax, -1
+        je [early_return_branch]
+
         ;; pop the registers
         pop r15
         pop r14
@@ -201,6 +205,48 @@ trampoline:
         add rsp, 256 + 16
 
         ;; finally we return
+        ret
+
+early_return_branch:
+        ;; pop the registers
+        pop r15
+        pop r14
+        pop r13
+        pop r12
+        pop r11
+        pop r10
+        pop r9
+        pop r8
+        pop rbp
+        pop rdi
+        pop rsi
+        pop rdx
+        pop rcx
+        pop rbx
+        pop rax
+
+        ;; restore xmm
+        movdqu xmm0, [rsp + 8 + 0*16]
+        movdqu xmm1, [rsp + 8 + 1*16]
+        movdqu xmm2, [rsp + 8 + 2*16]
+        movdqu xmm3, [rsp + 8 + 3*16]
+        movdqu xmm4, [rsp + 8 + 4*16]
+        movdqu xmm5, [rsp + 8 + 5*16]
+        movdqu xmm6, [rsp + 8 + 6*16]
+        movdqu xmm7, [rsp + 8 + 7*16]
+        movdqu xmm8, [rsp + 8 + 8*16]
+        movdqu xmm9, [rsp + 8 + 9*16]
+        movdqu xmm10, [rsp + 8 + 10*16]
+        movdqu xmm11, [rsp + 8 + 11*16]
+        movdqu xmm12, [rsp + 8 + 12*16]
+        movdqu xmm13, [rsp + 8 + 13*16]
+        movdqu xmm14, [rsp + 8 + 14*16]
+        movdqu xmm15, [rsp + 8 + 15*16]
+
+        ;; restore rsp (dealloc)
+        add rsp, 256 + 16
+
+        ;; we ret early before even calling the original function
         ret
 
 ;; Reference table

@@ -32,7 +32,7 @@ const _: () = assert!(
 
 pub const TRAMPOLINE_GEN_DESC: TrampolineGenDesc<TRAMPOLINE_SIZE> = TrampolineGenDesc {
     trampoline_src: TRAMPOLINE_HOOK,
-    function_id_offset: FUNCTION_ID_OFFSET as u64,
+    import_id_offset: FUNCTION_ID_OFFSET as u64,
     dispatcher_address_offset: DISPATCHER_ADDRESS_OFFSET as u64,
     original_function_address_offset: ORIGINAL_FUNCTION_OFFSET as u64,
 };

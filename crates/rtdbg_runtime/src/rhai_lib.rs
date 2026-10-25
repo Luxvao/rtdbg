@@ -13,8 +13,8 @@ use librtdbg::{
     arch::amd64::Amd64RegisterSnapshot,
     either::Either,
     hook::{
-        self, HookId, HookPriority, HookStatus, ImportId, attach_hook, hookstatus_module,
-        patch_import,
+        self, HookId, HookPhase, HookPriority, HookStatus, ImportId, attach_hook, hookphase_module,
+        hookstatus_module, patch_import,
     },
     parameter::{
         Parameter, ParameterLocation, ParameterValue, parameter_module, parameterlocation_module,
@@ -77,7 +77,7 @@ pub fn setup_types(engine: &mut Engine) {
 }
 
 pub fn setup_modules(engine: &mut Engine) {
-    register_modules!(engine, { Class, Endianness, OsAbi, ElfType, Machine, ProgramType, RelocType, Register, HookStatus, ParameterValue, ParameterLocation, Parameter });
+    register_modules!(engine, { Class, Endianness, OsAbi, ElfType, Machine, ProgramType, RelocType, Register, HookPhase, HookStatus, ParameterValue, ParameterLocation, Parameter });
 }
 
 // Get process info
@@ -186,7 +186,7 @@ fn get_import_id(import_slot: ImportSlot) -> Result<ImportId, Box<EvalAltResult>
 // Generic ImportId-based attach; internal, called by dedicated functions for the Either variants
 fn attach_hook_import_id_generic(
     import_id: ImportId,
-    prefix: bool,
+    phase: HookPhase,
     status: HookStatus,
     priority: HookPriority,
     parameters: Either<Vec<Parameter>, HashMap<String, Parameter>>,
@@ -201,7 +201,7 @@ fn attach_hook_import_id_generic(
     // We register it inactive to make sure it's not actually hit untill we set up the glue
     let hook_id = attach_hook(
         import_id,
-        prefix,
+        phase,
         HookStatus::Inactive,
         priority,
         parameters,
@@ -226,7 +226,7 @@ fn attach_hook_import_id_generic(
 // Generic ImportSlot-based attach. It automatically patches if needed, so it's a single call
 fn attach_hook_import_slot_generic(
     import_slot: ImportSlot,
-    prefix: bool,
+    phase: HookPhase,
     status: HookStatus,
     priority: HookPriority,
     parameters: Either<Vec<Parameter>, HashMap<String, Parameter>>,
@@ -236,13 +236,13 @@ fn attach_hook_import_slot_generic(
     let import_id = get_import_id(import_slot)?;
 
     attach_hook_import_id_generic(
-        import_id, prefix, status, priority, parameters, script_id, callback,
+        import_id, phase, status, priority, parameters, script_id, callback,
     )
 }
 
 fn attach_hook_import_id_vec(
     import_id: ImportId,
-    prefix: bool,
+    phase: HookPhase,
     status: HookStatus,
     priority: HookPriority,
     parameters: Array,
@@ -251,7 +251,7 @@ fn attach_hook_import_id_vec(
 ) -> Result<HookId, Box<EvalAltResult>> {
     attach_hook_import_id_generic(
         import_id,
-        prefix,
+        phase,
         status,
         priority,
         Either::First(
@@ -268,7 +268,7 @@ fn attach_hook_import_id_vec(
 
 fn attach_hook_import_id_map(
     import_id: ImportId,
-    prefix: bool,
+    phase: HookPhase,
     status: HookStatus,
     priority: HookPriority,
     parameters: Map,
@@ -277,7 +277,7 @@ fn attach_hook_import_id_map(
 ) -> Result<HookId, Box<EvalAltResult>> {
     attach_hook_import_id_generic(
         import_id,
-        prefix,
+        phase,
         status,
         priority,
         Either::Second(
@@ -294,7 +294,7 @@ fn attach_hook_import_id_map(
 
 fn attach_hook_import_slot_vec(
     import_slot: ImportSlot,
-    prefix: bool,
+    phase: HookPhase,
     status: HookStatus,
     priority: HookPriority,
     parameters: Array,
@@ -303,7 +303,7 @@ fn attach_hook_import_slot_vec(
 ) -> Result<HookId, Box<EvalAltResult>> {
     attach_hook_import_slot_generic(
         import_slot,
-        prefix,
+        phase,
         status,
         priority,
         Either::First(
@@ -320,7 +320,7 @@ fn attach_hook_import_slot_vec(
 
 fn attach_hook_import_slot_map(
     import_slot: ImportSlot,
-    prefix: bool,
+    phase: HookPhase,
     status: HookStatus,
     priority: HookPriority,
     parameters: Map,
@@ -329,7 +329,7 @@ fn attach_hook_import_slot_map(
 ) -> Result<HookId, Box<EvalAltResult>> {
     attach_hook_import_slot_generic(
         import_slot,
-        prefix,
+        phase,
         status,
         priority,
         Either::Second(

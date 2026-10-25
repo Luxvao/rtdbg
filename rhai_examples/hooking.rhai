@@ -5,7 +5,7 @@ fn init(script_id, script_store, global_store) {
 
 	for slot in import_slots {
 		if slot.module_name == "<main>" && slot.import_name == "printf" {
-			attach_hook(slot, true, HookStatus::Active, HookPriority(1), [
+			attach_hook(slot, HookPhase::Prefix, HookStatus::Active, HookPriority(1), [
 				Parameter::create(
 					ParameterLocation::Reg(Register::Rdi),
 					ParameterValue::Ptr([
