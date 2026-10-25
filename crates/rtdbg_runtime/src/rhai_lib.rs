@@ -13,8 +13,8 @@ use librtdbg::{
     arch::amd64::Amd64RegisterSnapshot,
     either::Either,
     hook::{
-        self, HookId, HookPhase, HookPriority, HookStatus, ImportId, attach_hook, hookphase_module,
-        hookstatus_module, patch_import,
+        self, CallControl, HookId, HookOrder, HookPhase, HookStatus, ImportId, attach_hook,
+        hookphase_module, hookstatus_module, patch_import,
     },
     parameter::{
         Parameter, ParameterLocation, ParameterValue, parameter_module, parameterlocation_module,
@@ -73,7 +73,7 @@ def_package! {
 }
 
 pub fn setup_types(engine: &mut Engine) {
-    register_types!(engine, { Permissions, Vma, Vmas, Process, ImportSlot, ElfHeader, ProgramHeader, ElfSym, ElfRel, ElfRela, Store, Amd64RegisterSnapshot, ImportId, HookId, HookPriority, Parameter });
+    register_types!(engine, { Permissions, Vma, Vmas, Process, ImportSlot, ElfHeader, ProgramHeader, ElfSym, ElfRel, ElfRela, Store, Amd64RegisterSnapshot, ImportId, HookId, HookOrder, CallControl, Parameter });
 }
 
 pub fn setup_modules(engine: &mut Engine) {
@@ -188,7 +188,7 @@ fn attach_hook_import_id_generic(
     import_id: ImportId,
     phase: HookPhase,
     status: HookStatus,
-    priority: HookPriority,
+    priority: HookOrder,
     parameters: Either<Vec<Parameter>, HashMap<String, Parameter>>,
     script_id: ScriptId,
     callback: FnPtr,
@@ -228,7 +228,7 @@ fn attach_hook_import_slot_generic(
     import_slot: ImportSlot,
     phase: HookPhase,
     status: HookStatus,
-    priority: HookPriority,
+    priority: HookOrder,
     parameters: Either<Vec<Parameter>, HashMap<String, Parameter>>,
     script_id: ScriptId,
     callback: FnPtr,
@@ -244,7 +244,7 @@ fn attach_hook_import_id_vec(
     import_id: ImportId,
     phase: HookPhase,
     status: HookStatus,
-    priority: HookPriority,
+    priority: HookOrder,
     parameters: Array,
     script_id: ScriptId,
     callback: FnPtr,
@@ -270,7 +270,7 @@ fn attach_hook_import_id_map(
     import_id: ImportId,
     phase: HookPhase,
     status: HookStatus,
-    priority: HookPriority,
+    priority: HookOrder,
     parameters: Map,
     script_id: ScriptId,
     callback: FnPtr,
@@ -296,7 +296,7 @@ fn attach_hook_import_slot_vec(
     import_slot: ImportSlot,
     phase: HookPhase,
     status: HookStatus,
-    priority: HookPriority,
+    priority: HookOrder,
     parameters: Array,
     script_id: ScriptId,
     callback: FnPtr,
@@ -322,7 +322,7 @@ fn attach_hook_import_slot_map(
     import_slot: ImportSlot,
     phase: HookPhase,
     status: HookStatus,
-    priority: HookPriority,
+    priority: HookOrder,
     parameters: Map,
     script_id: ScriptId,
     callback: FnPtr,

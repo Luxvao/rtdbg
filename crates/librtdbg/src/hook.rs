@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, VecDeque},
     ptr,
     sync::{
-        LazyLock, Mutex,
+        Arc, LazyLock, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
 };
@@ -12,8 +12,8 @@ use imp_core::ImportSlot;
 use libc::{
     _SC_PAGESIZE, MAP_ANONYMOUS, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE, mmap, sysconf,
 };
-use log::warn;
-use rhai::{CustomType, TypeBuilder};
+use log::{error, warn};
+use rhai::{CustomType, EvalAltResult, TypeBuilder};
 
 use crate::{
     ID_GEN,
@@ -90,7 +90,11 @@ pub struct ImportCtx {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, CustomType)]
 pub struct ImportId(u64);
 
-pub type HookCallback = fn(HookId, Either<&mut Vec<Parameter>, &mut HashMap<String, Parameter>>);
+pub type HookCallback = fn(
+    HookId,
+    Either<&mut Vec<Parameter>, &mut HashMap<String, Parameter>>,
+    Option<&mut CallControl>,
+);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, CustomType)]
 pub struct HookId {
@@ -110,7 +114,7 @@ pub struct HookManager {
 pub struct HookCtx {
     pub id: HookId,
     pub status: HookStatus,
-    pub priority: HookPriority,
+    pub priority: HookOrder,
     pub parameters: Either<Vec<Parameter>, HashMap<String, Parameter>>,
     pub callback: HookCallback,
 }
@@ -131,9 +135,15 @@ pub enum HookStatus {
 
 create_enum_module!(HookStatus => Active, Inactive);
 
+#[derive(Default, Debug, Clone, Copy, CustomType)]
+#[rhai_type(extra = Self::build_extra)]
+pub struct CallControl {
+    cancelled: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, CustomType)]
 #[rhai_type(extra = Self::build_extra)]
-pub struct HookPriority(u64);
+pub struct HookOrder(i64);
 
 impl TrampolineAllocator {
     pub fn new(trampoline_size: u64) -> TrampolineAllocator {
@@ -216,9 +226,46 @@ impl TrampolineAllocator {
     }
 }
 
-impl HookPriority {
+impl HookOrder {
     fn build_extra(builder: &mut TypeBuilder<Self>) {
-        builder.with_fn("HookPriority", |v: i64| HookPriority(v as u64));
+        builder.with_fn("HookOrder", |v: i64| HookOrder(v));
+    }
+}
+
+impl CallControl {
+    fn build_extra(builder: &mut TypeBuilder<Self>) {
+        builder
+            .with_fn("proceed", Self::proceed_rhai)
+            .with_fn("cancel", Self::cancel_rhai)
+            .with_fn("is_cancelled", Self::is_cancelled_rhai);
+    }
+
+    pub fn proceed(&mut self) {
+        self.cancelled = false;
+    }
+
+    pub fn cancel(&mut self) {
+        self.cancelled = true;
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled
+    }
+
+    fn proceed_rhai(s: &mut Arc<Mutex<CallControl>>) -> Result<(), Box<EvalAltResult>> {
+        s.lock().map_err(|e| e.to_string())?.proceed();
+
+        Ok(())
+    }
+
+    fn cancel_rhai(s: &mut Arc<Mutex<CallControl>>) -> Result<(), Box<EvalAltResult>> {
+        s.lock().map_err(|e| e.to_string())?.cancel();
+
+        Ok(())
+    }
+
+    fn is_cancelled_rhai(s: &mut Arc<Mutex<CallControl>>) -> Result<bool, Box<EvalAltResult>> {
+        Ok(s.lock().map_err(|e| e.to_string())?.cancelled)
     }
 }
 
@@ -229,7 +276,7 @@ thread_local! {
 extern "C" fn dispatcher(
     import_id: usize,
     is_prefix: bool,
-    register_snapshot: *const arch::NativeRegisterStruct,
+    register_snapshot: *mut arch::NativeRegisterStruct,
     original_return: usize,
     return_slot_address: usize,
 ) -> usize {
@@ -238,14 +285,14 @@ extern "C" fn dispatcher(
         0
     } else {
         RETURN_ADDRESSES.with_borrow_mut(|v| {
-            *v.get(&return_slot_address).unwrap_or_else(|| {
-                warn!("[HOOK DISPATCHER] Postfix hook hit but no return address available!");
-                &0
+            v.remove(&return_slot_address).unwrap_or_else(|| {
+                error!("[HOOK DISPATCHER] Postfix hook hit but no return address available!");
+                0
             })
         })
     };
 
-    let reg_snapshot = unsafe { &mut *(register_snapshot as *mut arch::NativeRegisterStruct) };
+    let reg_snapshot = unsafe { &mut *register_snapshot };
 
     let stack_base = register_snapshot as usize + size_of_val(reg_snapshot);
 
@@ -267,10 +314,10 @@ extern "C" fn dispatcher(
         }
     };
 
-    let mut hooks = if is_prefix {
-        hook_manager.prefix.clone()
+    let (mut hooks, mut call_control) = if is_prefix {
+        (hook_manager.prefix.clone(), Some(CallControl::default()))
     } else {
-        hook_manager.postfix.clone()
+        (hook_manager.postfix.clone(), None)
     };
 
     drop(hm_guard);
@@ -301,7 +348,7 @@ extern "C" fn dispatcher(
             }
         }
 
-        (ctx.callback)(id, ctx.parameters.as_mut());
+        (ctx.callback)(id, ctx.parameters.as_mut(), call_control.as_mut());
 
         match &ctx.parameters {
             Either::First(vec) => {
@@ -323,7 +370,18 @@ extern "C" fn dispatcher(
         }
     }
 
-    original_return
+    if let Some(call_ctrl) = call_control
+        && call_ctrl.is_cancelled()
+    {
+        // We remove the return address from the hashmap
+        RETURN_ADDRESSES.with_borrow_mut(|v| {
+            v.remove(&return_slot_address);
+        });
+
+        usize::MAX
+    } else {
+        original_return
+    }
 }
 
 pub fn get_import_id(import_slot: &ImportSlot) -> Result<Option<ImportId>, Error> {
@@ -434,7 +492,7 @@ pub fn attach_hook(
     import_id: ImportId,
     phase: HookPhase,
     status: HookStatus,
-    priority: HookPriority,
+    priority: HookOrder,
     parameters: Either<Vec<Parameter>, HashMap<String, Parameter>>,
     callback: HookCallback,
 ) -> Result<HookId, Error> {
@@ -484,7 +542,7 @@ pub fn detach_hook(hook_id: HookId) -> Result<(), Error> {
     }
 
     if let Some(index) = hook_mgr.postfix.iter().position(|i| i.id == hook_id) {
-        hook_mgr.prefix.remove(index);
+        hook_mgr.postfix.remove(index);
     }
 
     Ok(())

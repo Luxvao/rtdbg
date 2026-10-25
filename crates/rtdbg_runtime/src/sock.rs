@@ -9,7 +9,7 @@ use log::{error, info};
 use rhai::Dynamic;
 use serde::Deserialize;
 
-use crate::runtime::{load_script, run_function, status, unload_script};
+use crate::runtime::{get_script_functions, load_script, run_function, status, unload_script};
 
 pub static SOCKET_PATH: LazyLock<String> = LazyLock::new(setup_sock);
 
@@ -65,7 +65,7 @@ fn handle_client(mut stream: UnixStream) {
             Request::RunFunction {
                 script_id,
                 function,
-                params,
+                parameter: params,
             } => {
                 if let Some(params) = params {
                     run_function::<Dynamic, (Dynamic,)>(
@@ -88,6 +88,10 @@ fn handle_client(mut stream: UnixStream) {
                     )
                 }
             }
+            Request::ScriptFunctions { script_id } => get_script_functions(&script_id).map_or_else(
+                |e| Response::Error(e.to_string()),
+                |o| Response::ScriptFunctions { functions: o },
+            ),
             Request::Status => status().map_or_else(
                 |e| Response::Error(e.to_string()),
                 |scripts| Response::Status {

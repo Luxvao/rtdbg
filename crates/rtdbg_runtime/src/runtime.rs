@@ -7,8 +7,9 @@ use librtdbg::{
     ID_GEN,
     either::Either,
     error::Error,
-    hook::{HookId, detach_hook},
+    hook::{CallControl, HookId, detach_hook},
     parameter::Parameter,
+    rhai_utils::{parse_array, parse_map},
     script::{Script, ScriptCallback, ScriptContext, ScriptId, Store},
 };
 use log::{info, warn};
@@ -132,9 +133,27 @@ pub fn status() -> Result<Vec<ScriptId>, Error> {
     Ok(SCRIPT_STORAGE.lock()?.keys().copied().collect())
 }
 
+pub fn get_script_functions(script_id: &ScriptId) -> Result<Vec<(String, Vec<String>)>, Error> {
+    Ok(SCRIPT_STORAGE
+        .lock()?
+        .get(script_id)
+        .ok_or(Error::NoSuchScript)?
+        .script
+        .ast
+        .iter_functions()
+        .map(|f| {
+            (
+                f.name.to_string(),
+                f.params.iter().map(|s| s.to_string()).collect(),
+            )
+        })
+        .collect())
+}
+
 pub fn rhai_dispatcher(
     hook_id: HookId,
     parameters: Either<&mut Vec<Parameter>, &mut HashMap<String, Parameter>>,
+    call_control: Option<&mut CallControl>,
 ) {
     let Ok(rhai_hook_callbacks_guard) = RHAI_HOOK_CALLBACKS.lock() else {
         warn!("`RHAI_HOOK_CALLBACKS` poisoned, skipping!");
@@ -150,22 +169,45 @@ pub fn rhai_dispatcher(
 
     match parameters {
         Either::First(vec) => {
-            let vec_cloned = vec.iter().map(|i| Dynamic::from(i.clone())).collect();
+            let vec_cloned = vec
+                .iter()
+                .map(|i| Dynamic::from(i.clone()))
+                .collect::<Array>();
 
-            let Ok(return_parameters_vec) = run_fn_ptr::<Array, (Array,)>(
-                script_callback.script_id,
-                &script_callback.callback,
-                (vec_cloned,),
-            ) else {
-                warn!("Script callback {script_callback:?} did not return an Array of Parameter!");
-                return;
+            let callback_return: Result<Array, _> = if let Some(call_ctrl) = call_control {
+                let ctrl = Arc::new(Mutex::new(std::mem::take(call_ctrl)));
+
+                let ret = run_fn_ptr(
+                    script_callback.script_id,
+                    &script_callback.callback,
+                    (vec_cloned, ctrl.clone()),
+                );
+
+                match ctrl.lock() {
+                    Ok(mut ctrl) => *call_ctrl = std::mem::take(&mut *ctrl),
+                    Err(e) => {
+                        warn!("Unable to retrieve CallControl in {script_callback:?}! Error: {e}")
+                    }
+                }
+
+                ret
+            } else {
+                run_fn_ptr(
+                    script_callback.script_id,
+                    &script_callback.callback,
+                    (vec_cloned,),
+                )
             };
 
-            *vec = match return_parameters_vec
-                .into_iter()
-                .map(|i| i.try_cast::<Parameter>())
-                .collect::<Option<Vec<Parameter>>>()
-            {
+            let return_parameters_vec = match callback_return {
+                Ok(ret) => ret,
+                Err(e) => {
+                    warn!("Script callback {script_callback:?} errored with: {e}");
+                    return;
+                }
+            };
+
+            *vec = match parse_array(return_parameters_vec) {
                 Some(vec) => vec,
                 None => {
                     warn!(
@@ -181,20 +223,40 @@ pub fn rhai_dispatcher(
                 .map(|(k, v)| (k.into(), Dynamic::from(v.clone())))
                 .collect::<Map>();
 
-            let Ok(return_parameters_map) = run_fn_ptr::<Map, (Map,)>(
-                script_callback.script_id,
-                &script_callback.callback,
-                (map_cloned,),
-            ) else {
-                warn!("Script callback {script_callback:?} did not return a Map!");
-                return;
+            let callback_return: Result<Map, _> = if let Some(call_ctrl) = call_control {
+                let ctrl = Arc::new(Mutex::new(std::mem::take(call_ctrl)));
+
+                let ret = run_fn_ptr(
+                    script_callback.script_id,
+                    &script_callback.callback,
+                    (map_cloned, ctrl.clone()),
+                );
+
+                match ctrl.lock() {
+                    Ok(mut ctrl) => *call_ctrl = std::mem::take(&mut *ctrl),
+                    Err(e) => {
+                        warn!("Unable to retrieve CallControl in {script_callback:?}! Error: {e}")
+                    }
+                }
+
+                ret
+            } else {
+                run_fn_ptr(
+                    script_callback.script_id,
+                    &script_callback.callback,
+                    (map_cloned,),
+                )
             };
 
-            let Some(return_parameter_hashmap) = return_parameters_map
-                .into_iter()
-                .map(|(k, v)| Some((k.into(), v.try_cast::<Parameter>()?)))
-                .collect::<Option<HashMap<String, Parameter>>>()
-            else {
+            let return_parameters_map = match callback_return {
+                Ok(ret) => ret,
+                Err(e) => {
+                    warn!("Script callback {script_callback:?} errored with: {e}");
+                    return;
+                }
+            };
+
+            let Some(return_parameter_hashmap) = parse_map(return_parameters_map) else {
                 warn!("Script callback {script_callback:?} did not return a Map of Parameters!");
                 return;
             };

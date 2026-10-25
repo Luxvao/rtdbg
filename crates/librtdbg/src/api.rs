@@ -14,16 +14,28 @@ pub enum Request {
     RunFunction {
         script_id: ScriptId,
         function: String,
-        params: Option<Value>,
+        parameter: Option<Value>,
     },
     Status,
+    ScriptFunctions {
+        script_id: ScriptId,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Response {
     Success,
-    LoadSuccess { script_id: ScriptId },
-    RunSuccess { response: Value },
-    Status { loaded_scripts: Vec<ScriptId> },
+    LoadSuccess {
+        script_id: ScriptId,
+    },
+    RunSuccess {
+        response: Value,
+    },
+    Status {
+        loaded_scripts: Vec<ScriptId>,
+    },
+    ScriptFunctions {
+        functions: Vec<(String, Vec<String>)>,
+    },
     Error(String),
 }

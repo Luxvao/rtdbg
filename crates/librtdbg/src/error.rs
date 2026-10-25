@@ -18,6 +18,8 @@ pub enum Error {
     #[error("{0}")]
     RhaiParseError(#[from] rhai::ParseError),
     #[error("{0}")]
+    SerdeJsonError(#[from] serde_json::Error),
+    #[error("{0}")]
     EvalAltResult(#[from] Box<rhai::EvalAltResult>),
     #[error("Received invalid permissions byte, {0}")]
     PermissionsError(String),

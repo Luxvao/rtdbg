@@ -170,24 +170,20 @@ impl Parameter {
 
                 Self::commit_cstr(&cstring, &self.location, base)?;
             }
-            ParameterValue::Ptr(addy, parameters) => {
+            ParameterValue::Ptr(Some(addy), parameters) => {
                 // We first construct, and only after do we write the pointer
                 for parameter in parameters {
-                    parameter.try_commit(register_snapshot, base)?;
+                    parameter.try_commit(register_snapshot, *addy)?;
                 }
 
-                if let Some(addy) = addy {
-                    Self::commit_value(*addy, &self.location, register_snapshot, base);
-                }
+                Self::commit_value(*addy, &self.location, register_snapshot, base);
             }
-            ParameterValue::NamedPtr(addy, parameters) => {
+            ParameterValue::NamedPtr(Some(addy), parameters) => {
                 for parameter in parameters.values() {
-                    parameter.try_commit(register_snapshot, base)?;
+                    parameter.try_commit(register_snapshot, *addy)?;
                 }
 
-                if let Some(addy) = addy {
-                    Self::commit_value(*addy, &self.location, register_snapshot, base);
-                }
+                Self::commit_value(*addy, &self.location, register_snapshot, base);
             }
             _ => (),
         }
@@ -210,12 +206,16 @@ impl Parameter {
         }
     }
 
-    pub fn commit_value<T: ToU128, R: RegisterSnapshot>(
+    pub fn commit_value<T: Copy + FromU128 + ToU128 + PartialEq, R: RegisterSnapshot>(
         value: T,
         location: &ParameterLocation,
         register_snapshot: &mut R,
         base: u64,
     ) {
+        if Self::acquire_value::<T, R>(location, register_snapshot, base) == value {
+            return;
+        }
+
         match location {
             ParameterLocation::Relative(o) => {
                 let memory = Memory::at(base);
@@ -240,6 +240,10 @@ impl Parameter {
     }
 
     pub fn commit_cstr(value: &CStr, location: &ParameterLocation, base: u64) -> Result<(), Error> {
+        if Self::acquire_cstr(location, base)? == value {
+            return Ok(());
+        }
+
         match location {
             ParameterLocation::Relative(o) => {
                 let memory = Memory::at(base);
