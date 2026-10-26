@@ -8,8 +8,5 @@ fn main() {
 
     RTDBG_PACKAGE.register_into_engine(&mut engine);
 
-    engine
-        .definitions()
-        .write_to_file("rtdbglib.d.rhai")
-        .unwrap();
+    engine.definitions().write_to_dir("./definitions").unwrap();
 }

@@ -9,6 +9,8 @@ fn init(script_id, script_store, global_store) {
 		ParameterValue::U64,
 	);
 
+	let test = Register::Rax;
+
 	let format_string_accessor = Parameter::create(
 		ParameterLocation::Reg(Register::Rdi),
 		ParameterValue::Ptr([
@@ -26,10 +28,10 @@ fn init(script_id, script_store, global_store) {
 				HookPhase::Prefix,
 				HookStatus::Active,
 				HookOrder(0),
-				[
-					rax_accessor,
-					format_string_accessor,
-				],
+				#{
+					rax: rax_accessor,
+					format_string: format_string_accessor,
+				},
 				script_id,
 				|script_id, script_store, global_store, parameters, call_ctrl| {
 					if !script_store.get("hooks_enabled") {
@@ -38,12 +40,15 @@ fn init(script_id, script_store, global_store) {
 
 					let count = script_store.get("counter") + 1;
 					script_store.set("counter", count);
+
+					// Prefix functions can prevent the original from being ran
+					// call_ctrl.cancel();
 			
 					print(`printf hook hit ${count} time(s)`);
 
-					print(parameters);
+					print(`RAX val: ${parameters.rax.val} Format string: ${parameters.format_string[0].val}`);
 
-					[]
+					parameters
 				}
 			);
 		}
@@ -54,16 +59,16 @@ fn init(script_id, script_store, global_store) {
 				HookPhase::Postfix,
 				HookStatus::Active,
 				HookOrder(0),
-				[
-					rax_accessor,
-				],
+				#{
+					ret: rax_accessor,
+				},
 				script_id,
 				|script_id, script_store, global_store, parameters| {
 					if !script_store.get("hooks_enabled") {
 						return [];
 					}
 
-					parameters[0].value = ParameterValue::U64(69420);
+					parameters.ret.val = ParameterValue::U64(69420);
 
 					parameters
 				}

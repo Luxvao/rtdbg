@@ -3,14 +3,24 @@ use std::{
     ffi::{CStr, CString},
 };
 
-use rhai::{CustomType, TypeBuilder, export_module};
+use rhai::{CustomType, Dynamic, EvalAltResult, TypeBuilder, export_module};
 
 use crate::{
     error::Error,
     memory::Memory,
     register::{Register, RegisterSnapshot},
+    rhai_utils::parse_array,
     utils::{FromU128, ToU128},
 };
+
+#[derive(Debug, Clone, PartialEq, CustomType)]
+#[rhai_type(extra = Self::build_extra)]
+pub struct Parameter {
+    #[rhai_type(skip)]
+    pub location: ParameterLocation,
+    #[rhai_type(skip)]
+    pub value: ParameterValue,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParameterValue {
@@ -38,18 +48,125 @@ pub enum ParameterLocation {
     Reg(Register),
 }
 
-#[derive(Debug, Clone, PartialEq, CustomType)]
-#[rhai_type(extra = Self::build_extra)]
-pub struct Parameter {
-    pub location: ParameterLocation,
-    pub value: ParameterValue,
-}
-
 impl Parameter {
     fn build_extra(builder: &mut TypeBuilder<Self>) {
         builder
+            .with_indexer_get_set(
+                Self::rhai_integer_indexer_get,
+                Self::rhai_integer_indexer_set,
+            )
+            .with_indexer_get_set(Self::rhai_string_indexer_get, Self::rhai_string_indexer_set)
             .on_print(|v| format!("{v:?}"))
             .on_debug(|v| format!("{v:?}"));
+    }
+
+    fn rhai_integer_indexer_get(&mut self, index: i64) -> Dynamic {
+        if let ParameterValue::Ptr(_, ref p) = self.value {
+            return match p.get(index as usize) {
+                Some(v) => Dynamic::from(v.clone()),
+                None => Dynamic::UNIT,
+            };
+        }
+
+        Dynamic::UNIT
+    }
+
+    fn rhai_integer_indexer_set(
+        &mut self,
+        index: i64,
+        value: Dynamic,
+    ) -> Result<(), Box<EvalAltResult>> {
+        if let ParameterValue::Ptr(_, ref mut p) = self.value {
+            let index = index as usize;
+
+            if index > p.len() {
+                return Err("Index out of bounds".into());
+            }
+
+            p.insert(
+                index,
+                value.try_cast().ok_or("Setter on Ptr takes a Parameter")?,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn rhai_string_indexer_get(&mut self, index: &str) -> Dynamic {
+        if index == "parameter_location" {
+            return Dynamic::from(self.location);
+        }
+
+        if index == "parameter_value" {
+            return Dynamic::from(self.value.clone());
+        }
+
+        match self.value {
+            ParameterValue::NamedPtr(_, ref h) => {
+                return match h.get(index) {
+                    Some(p) => Dynamic::from(p.clone()),
+                    None => Dynamic::UNIT,
+                };
+            }
+            ParameterValue::U8(Some(v)) if index == "val" => Dynamic::from(v),
+            ParameterValue::U16(Some(v)) if index == "val" => Dynamic::from(v),
+            ParameterValue::U32(Some(v)) if index == "val" => Dynamic::from(v),
+            ParameterValue::U64(Some(v)) if index == "val" => Dynamic::from(v),
+            ParameterValue::I8(Some(v)) if index == "val" => Dynamic::from(v),
+            ParameterValue::I16(Some(v)) if index == "val" => Dynamic::from(v),
+            ParameterValue::I32(Some(v)) if index == "val" => Dynamic::from(v),
+            ParameterValue::I64(Some(v)) if index == "val" => Dynamic::from(v),
+            ParameterValue::F32(Some(v)) if index == "val" => Dynamic::from(v),
+            ParameterValue::F64(Some(v)) if index == "val" => Dynamic::from(v),
+            ParameterValue::CStr(Some(ref v)) if index == "val" => Dynamic::from(v.to_string()),
+            ParameterValue::Ptr(_, ref v) if index == "val" => v.clone().into(),
+            _ => Dynamic::UNIT,
+        }
+    }
+
+    fn rhai_string_indexer_set(
+        &mut self,
+        index: &str,
+        value: Dynamic,
+    ) -> Result<(), Box<EvalAltResult>> {
+        if index == "parameter_location" {
+            self.location = value
+                .try_cast()
+                .ok_or("parameter_location takes a ParameterLocation")?;
+
+            return Ok(());
+        }
+
+        if index == "parameter_value" {
+            self.value = value
+                .try_cast()
+                .ok_or("parameter_value takes a ParameterValue")?;
+
+            return Ok(());
+        }
+
+        match self.value {
+            ParameterValue::NamedPtr(_, ref mut h) => {
+                let parameter = value
+                    .try_cast()
+                    .ok_or("Setter on a NamedPtr takes a Parameter")?;
+
+                match h.entry(index.to_string()) {
+                    std::collections::hash_map::Entry::Occupied(mut e) => {
+                        *e.get_mut() = parameter;
+                    }
+                    std::collections::hash_map::Entry::Vacant(e) => {
+                        e.insert(parameter);
+                    }
+                }
+            }
+            ref mut a if index == "val" => {
+                *a = value.try_cast().ok_or("Setter takes a ParameterValue")?
+            }
+            _ => (),
+        }
+
+        Ok(())
     }
 
     pub fn try_resolve<R: RegisterSnapshot>(

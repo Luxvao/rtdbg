@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-eframe = "0.31.1"
-egui = "0.31.1"
-librtdbg = { path="../librtdbg", features = [ "include_runtime" ] }
+color-eyre = "0.6.5"
+iced = { version = "0.14.0", features = ["svg"] }
+librtdbg = { workspace = true, features = ["include_runtime"] }
+rfd = "0.17.2"
