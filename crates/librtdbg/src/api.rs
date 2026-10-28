@@ -32,7 +32,7 @@ pub enum Response {
         response: Value,
     },
     Status {
-        loaded_scripts: Vec<ScriptId>,
+        loaded_scripts: Vec<(ScriptId, String)>,
     },
     ScriptFunctions {
         functions: Vec<(String, Vec<String>)>,

@@ -9,7 +9,6 @@ use crate::{
     error::Error,
     memory::Memory,
     register::{Register, RegisterSnapshot},
-    rhai_utils::parse_array,
     utils::{FromU128, ToU128},
 };
 

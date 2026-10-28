@@ -3,7 +3,7 @@ use std::sync::PoisonError;
 use imp_core::ImportSlot;
 use thiserror::Error;
 
-use crate::hook::HookId;
+use crate::{api::Response, hook::HookId};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -57,6 +57,8 @@ pub enum Error {
     IcacheFlushFailed,
     #[error("Hook {0:?} does not exist")]
     NoSuchHook(HookId),
+    #[error("Unexpected response {0:?}")]
+    UnexpectedResponse(Response),
 }
 
 impl<T> From<PoisonError<T>> for Error {

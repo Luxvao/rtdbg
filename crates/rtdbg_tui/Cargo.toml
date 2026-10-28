@@ -6,4 +6,7 @@ edition = "2024"
 [dependencies]
 color-eyre = "0.6.5"
 crossterm = "0.29.0"
+librtdbg = { workspace = true, features = ["include_runtime"] }
 ratatui = "0.30.2"
+serde_json.workspace = true
+sysinfo = "0.39.6"

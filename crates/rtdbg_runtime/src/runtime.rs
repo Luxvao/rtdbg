@@ -12,7 +12,7 @@ use librtdbg::{
     rhai_utils::{parse_array, parse_map},
     script::{Script, ScriptCallback, ScriptContext, ScriptId, Store},
 };
-use log::{info, warn};
+use log::warn;
 use rhai::{Array, Dynamic, Engine, FnPtr, FuncArgs, Map, Scope, packages::Package};
 
 use crate::rhai_lib::RTDBG_PACKAGE;
@@ -28,9 +28,6 @@ pub static RHAI_HOOK_CALLBACKS: LazyLock<Mutex<HashMap<HookId, ScriptCallback>>>
 pub fn runtime() {
     // Set up the logger
     colog::init();
-
-    // Display the PID of this process
-    info!("PID: {}", std::process::id());
 }
 
 pub fn load_script(script: String) -> Result<ScriptId, Error> {
@@ -40,7 +37,8 @@ pub fn load_script(script: String) -> Result<ScriptId, Error> {
     RTDBG_PACKAGE.register_into_engine(&mut engine);
 
     let script = Script {
-        ast: engine.compile(script)?,
+        ast: engine.compile(&script)?,
+        src: script,
     };
 
     let script_store = Store::new();
@@ -129,8 +127,12 @@ pub fn run_function<T: Clone + Send + Sync + 'static, P: FuncArgs>(
     run_fn_ptr(script_id, &FnPtr::new(function).map_err(Error::from)?, args)
 }
 
-pub fn status() -> Result<Vec<ScriptId>, Error> {
-    Ok(SCRIPT_STORAGE.lock()?.keys().copied().collect())
+pub fn status() -> Result<Vec<(ScriptId, String)>, Error> {
+    Ok(SCRIPT_STORAGE
+        .lock()?
+        .iter()
+        .map(|(k, ref v)| (*k, v.script.src.clone()))
+        .collect())
 }
 
 pub fn get_script_functions(script_id: &ScriptId) -> Result<Vec<(String, Vec<String>)>, Error> {

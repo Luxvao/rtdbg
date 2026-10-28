@@ -12,6 +12,7 @@ pub struct ScriptId(pub u64);
 // Script related apis
 #[derive(Debug, Clone)]
 pub struct Script {
+    pub src: String,
     pub ast: AST,
 }
 
