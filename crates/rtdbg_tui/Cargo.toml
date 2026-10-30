@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4.6.7", features = ["derive"] }
-color-eyre = "0.6.5"
-crossterm = "0.29.0"
+clap = { workspace = true, features = ["derive"] }
+color-eyre = { workspace = true }
+crossterm = { workspace = true }
 librtdbg = { workspace = true, features = ["include_runtime"] }
-ratatui = "0.30.2"
+ratatui = { workspace = true }
 serde_json.workspace = true
-sysinfo = "0.39.6"
+sysinfo = { workspace = true }
