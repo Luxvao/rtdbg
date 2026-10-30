@@ -7,15 +7,21 @@ fn init(script_id, script_store, global_store) {
 		ParameterValue::U64,
 	);
 
-	let format_string_accessor = Parameter::create(
+	let format_string_accessor = Parameter::deref(
 		ParameterLocation::Reg(Register::Rdi),
-		ParameterValue::Ptr([
-			Parameter::create(
-				ParameterLocation::Relative(0),
-				ParameterValue::CStr,
-			)
-		])
+		ParameterValue::CStr,
 	);
+	
+	// Expands to:
+	// let format_string_accessor = Parameter::create(
+	// 	ParameterLocation::Reg(Register::Rdi),
+	// 	ParameterValue::Ptr([
+	// 		Parameter::create(
+	// 			ParameterLocation::Relative(0),
+	// 			ParameterValue::CStr,
+	// 		)
+	// 	])
+	// );
 
 	let printf_slots = find_import_slots("<main>", "printf");
 

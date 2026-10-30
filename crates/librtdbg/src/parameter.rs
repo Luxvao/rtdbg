@@ -181,6 +181,20 @@ impl Parameter {
         Ok(())
     }
 
+    // Make it easier to construct a pointer to a specific ParameterValue
+    pub fn deref(what: ParameterLocation, to: ParameterValue) -> Parameter {
+        Parameter {
+            location: what,
+            value: ParameterValue::Ptr(
+                None,
+                vec![Parameter {
+                    location: ParameterLocation::Relative(0),
+                    value: to,
+                }],
+            ),
+        }
+    }
+
     pub fn try_resolve<R: RegisterSnapshot>(
         &mut self,
         register_snapshot: &R,
@@ -386,14 +400,17 @@ impl Parameter {
     }
 }
 
-// Expose Parameter::create() to rhai
+// Expose Parameter::create() and Parameter::deref() to rhai
 #[export_module]
 pub mod parameter_module {
     use crate::parameter::{Parameter, ParameterLocation, ParameterValue};
 
-    #[rhai_fn(name = "create")]
     pub fn create(location: ParameterLocation, value: ParameterValue) -> Parameter {
         Parameter { location, value }
+    }
+
+    pub fn deref(what: ParameterLocation, to: ParameterValue) -> Parameter {
+        Parameter::deref(what, to)
     }
 }
 
