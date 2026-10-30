@@ -1,6 +1,8 @@
 use std::{
+    collections::VecDeque,
     fmt::Display,
     os::unix::net::UnixStream,
+    path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -11,6 +13,7 @@ use librtdbg::script::ScriptId;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout, Rect},
+    style::{Modifier, Style},
     widgets::{Block, List, ListState, Paragraph, Tabs},
 };
 use sysinfo::{Pid, System};
@@ -71,11 +74,11 @@ enum CurrentTab {
 }
 
 #[derive(Default, Debug)]
-struct ScriptsManager {
+pub struct ScriptsManager {
     local_selected: bool,
 
     remote_scripts: Vec<(ScriptId, String)>,
-    local_scripts: Vec<(String, String)>,
+    pub local_scripts: Vec<(String, String)>,
 
     remote_scripts_state: ListState,
     local_scripts_state: ListState,
@@ -126,14 +129,6 @@ impl ScriptsManager {
         }
     }
 
-    fn get_remote_scripts(&mut self) -> &mut Vec<(ScriptId, String)> {
-        &mut self.remote_scripts
-    }
-
-    fn get_local_scripts(&mut self) -> &mut Vec<(String, String)> {
-        &mut self.local_scripts
-    }
-
     fn update_preview_perms(&mut self) {
         if self.local_selected {
             self.preview.read_only(false);
@@ -168,7 +163,7 @@ impl ScriptsManager {
 }
 
 #[derive(Default, Debug)]
-struct App {
+pub struct App {
     exit: bool,
     tab: CurrentTab,
     state: State,
@@ -176,15 +171,17 @@ struct App {
     // Process stuff
     pid: Option<u32>,
     injection_method: InjectionStatus,
-    stdout: Arc<Mutex<String>>,
+    stdout_scroll: usize,
+    stdout_paragraph_height: usize,
+    stdout: Arc<Mutex<VecDeque<String>>>,
     socket: Option<UnixStream>,
 
     // Scripts
-    scripts_mgr: ScriptsManager,
+    pub scripts_mgr: ScriptsManager,
 }
 
 impl App {
-    fn app(&mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
+    pub fn app(&mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         loop {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_events()?;
@@ -274,8 +271,10 @@ impl App {
                     TextInputStatus::Done(i) => {
                         self.state = State::Normal;
 
-                        match load_from_disk(&i) {
-                            Ok(v) => self.scripts_mgr.get_local_scripts().push(v),
+                        let path = PathBuf::from(i);
+
+                        match load_from_disk(&path) {
+                            Ok(v) => self.scripts_mgr.local_scripts.push(v),
                             Err(e) => {
                                 self.state = State::DisplayError(format!(
                                     "Unable to add script, error: {}",
@@ -303,7 +302,7 @@ impl App {
                 KeyCode::Char('2') => {
                     if let Some(ref mut socket) = self.socket {
                         match remote_scripts(socket) {
-                            Ok(scripts) => *self.scripts_mgr.get_remote_scripts() = scripts,
+                            Ok(scripts) => self.scripts_mgr.remote_scripts = scripts,
                             Err(e) => {
                                 self.state = State::DisplayError(format!(
                                     "Unable to fetch remote scripts, error: {}",
@@ -332,7 +331,7 @@ impl App {
         Ok(())
     }
 
-    fn construct_overview(&self, frame: &mut Frame, area: Rect) {
+    fn construct_overview(&mut self, frame: &mut Frame, area: Rect) {
         let [left, right] =
             Layout::horizontal([Constraint::Fill(3), Constraint::Fill(1)]).areas(area);
 
@@ -346,17 +345,32 @@ impl App {
 
         let stdout_lock = self.stdout.try_lock();
 
-        let blank = String::new();
+        // Stdout paragraph height
+        let stdout_height = stdout_paragraph_block.inner(stdout_top).height as usize;
 
-        let stdout_paragraph = Paragraph::new(&**stdout_lock.as_deref().unwrap_or(&blank))
-            .block(stdout_paragraph_block);
+        self.stdout_paragraph_height = stdout_height;
+
+        let stdout_shown = match stdout_lock {
+            Ok(stdout) => stdout
+                .iter()
+                .skip(self.stdout_scroll)
+                .take(stdout_height)
+                .rev()
+                .map(|v| v.as_str())
+                .collect::<String>(),
+            Err(_) => String::new(),
+        };
+
+        let stdout_paragraph = Paragraph::new(stdout_shown).block(stdout_paragraph_block);
 
         frame.render_widget(stdout_paragraph, stdout_top);
 
         // Binds panel
         let binds_block = Block::bordered();
 
-        let binds = Paragraph::new(" [i]nject │ [l]aunch │ [k]ill").block(binds_block);
+        let binds =
+            Paragraph::new(" [J] scroll down │ [K] scroll up │ [i]nject │ [l]aunch │ [k]ill")
+                .block(binds_block);
 
         frame.render_widget(binds, binds_bottom);
 
@@ -378,6 +392,14 @@ impl App {
 
     fn handle_events_overview(&mut self, code: KeyCode) {
         match code {
+            KeyCode::Char('J') => self.stdout_scroll = self.stdout_scroll.saturating_sub(1),
+            KeyCode::Char('K') => {
+                if self.stdout.lock().expect("Stdout mutex poisoned").len() - self.stdout_scroll
+                    > self.stdout_paragraph_height
+                {
+                    self.stdout_scroll = self.stdout_scroll.saturating_add(1);
+                }
+            }
             KeyCode::Char('i') => {
                 self.state = State::PidTextInput(TextInput::new("PID:".to_string()))
             }
@@ -386,7 +408,7 @@ impl App {
             }
             KeyCode::Char('k') if let Some(pid) = self.pid.take() => {
                 self.injection_method = InjectionStatus::NotInjected;
-                self.stdout = Arc::new(Mutex::new(String::new()));
+                self.stdout = Arc::new(Mutex::new(VecDeque::new()));
 
                 let mut sys = System::new();
 
@@ -415,34 +437,54 @@ impl App {
 
         let remote_block = Block::bordered().title(remote_title);
 
-        let injected_list = List::new(
+        let remote_highlight_style = if !self.scripts_mgr.local_selected {
+            Style::default()
+                .fg(ratatui::style::Color::Black)
+                .bg(ratatui::style::Color::White)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        let remote_list = List::new(
             self.scripts_mgr
                 .remote_scripts
                 .iter()
                 .map(|(s, _)| format!("{:?}", s)),
         )
+        .highlight_style(remote_highlight_style)
         .block(remote_block);
 
         frame.render_stateful_widget(
-            injected_list,
+            remote_list,
             injected_space,
             &mut self.scripts_mgr.remote_scripts_state,
         );
 
         let local_title = self.scripts_mgr.get_local_title();
 
-        let managed_block = Block::bordered().title(local_title);
+        let local_block = Block::bordered().title(local_title);
 
-        let managed_list = List::new(
+        let local_highlight_style = if self.scripts_mgr.local_selected {
+            Style::default()
+                .fg(ratatui::style::Color::Black)
+                .bg(ratatui::style::Color::White)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        let local_list = List::new(
             self.scripts_mgr
                 .local_scripts
                 .iter()
                 .map(|(s, _)| s.clone()),
         )
-        .block(managed_block);
+        .highlight_style(local_highlight_style)
+        .block(local_block);
 
         frame.render_stateful_widget(
-            managed_list,
+            local_list,
             managed_space,
             &mut self.scripts_mgr.local_scripts_state,
         );
@@ -475,7 +517,21 @@ impl App {
     fn handle_events_scripts(&mut self, code: KeyCode) {
         match code {
             // Generic
-            KeyCode::Tab => self.scripts_mgr.toggle_active(),
+            KeyCode::Tab => {
+                if let Some(v) = self.scripts_mgr.get_state().selected() {
+                    self.scripts_mgr
+                        .set_src_at(v, self.scripts_mgr.preview.get_text());
+                }
+
+                self.scripts_mgr.toggle_active();
+
+                let new_text = match self.scripts_mgr.get_state().selected() {
+                    Some(v) => self.scripts_mgr.get_src_at(v).unwrap_or_default(),
+                    None => String::default(),
+                };
+
+                self.scripts_mgr.preview.set_text(new_text);
+            }
 
             KeyCode::Enter
                 if let Some(index) = self.scripts_mgr.get_state().selected()
@@ -526,6 +582,15 @@ impl App {
                                 e
                             ));
                         }
+
+                        self.clamp_selection();
+
+                        let new_text = match self.scripts_mgr.get_state().selected() {
+                            Some(v) => self.scripts_mgr.get_src_at(v).unwrap_or_default(),
+                            None => String::default(),
+                        };
+
+                        self.scripts_mgr.preview.set_text(new_text);
                     }
                 }
                 _ => (),
@@ -557,11 +622,31 @@ impl App {
                                 ))
                             }
                         }
+
+                        self.clamp_selection();
+
+                        let new_text = match self.scripts_mgr.get_state().selected() {
+                            Some(v) => self.scripts_mgr.get_src_at(v).unwrap_or_default(),
+                            None => String::default(),
+                        };
+
+                        self.scripts_mgr.preview.set_text(new_text);
                     }
                 }
                 _ => (),
             },
 
+            _ => (),
+        }
+    }
+
+    fn clamp_selection(&mut self) {
+        let len = self.scripts_mgr.get_sel_len();
+        let state = self.scripts_mgr.get_state();
+
+        match state.selected() {
+            Some(_) if len == 0 => state.select(None),
+            Some(i) if i >= len => state.select(Some(len - 1)),
             _ => (),
         }
     }

@@ -1,35 +1,24 @@
-use std::{
-    os::unix::net::{UnixListener, UnixStream},
-    process::exit,
-    sync::LazyLock,
-};
+use std::os::unix::net::UnixStream;
 
-use librtdbg::api::{Request, Response};
+use librtdbg::{
+    api::{Request, Response},
+    os::{NativeRuntimeProvider, RuntimeProvider},
+};
 use log::{error, info};
 use rhai::Dynamic;
 use serde::Deserialize;
 
 use crate::runtime::{get_script_functions, load_script, run_function, status, unload_script};
 
-pub static SOCKET_PATH: LazyLock<String> = LazyLock::new(setup_sock);
-
-fn setup_sock() -> String {
+pub fn io() {
     let pid = std::process::id();
 
-    format!("/tmp/rtdbg-{pid}.sock")
-}
-
-fn clean_sock() {
-    let sock_path = setup_sock();
-
-    let _ = std::fs::remove_file(sock_path);
-}
-
-pub fn io() {
-    let Ok(listener) = UnixListener::bind(SOCKET_PATH.clone()) else {
-        error!("Failed to bind the socket, exiting!");
-
-        exit(1);
+    let listener = match NativeRuntimeProvider::create_socket(pid) {
+        Ok(listener) => listener,
+        Err(e) => {
+            error!("{e}");
+            return;
+        }
     };
 
     for stream in listener.incoming().flatten() {

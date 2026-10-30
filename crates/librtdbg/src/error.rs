@@ -21,6 +21,8 @@ pub enum Error {
     SerdeJsonError(#[from] serde_json::Error),
     #[error("{0}")]
     EvalAltResult(#[from] Box<rhai::EvalAltResult>),
+    #[error("{0}")]
+    VarError(#[from] std::env::VarError),
     #[error("Received invalid permissions byte, {0}")]
     PermissionsError(String),
     #[error("Received invalid VMA map, {0}")]
@@ -59,6 +61,8 @@ pub enum Error {
     NoSuchHook(HookId),
     #[error("Unexpected response {0:?}")]
     UnexpectedResponse(Response),
+    #[error("Operation timed out")]
+    Timeout,
 }
 
 impl<T> From<PoisonError<T>> for Error {

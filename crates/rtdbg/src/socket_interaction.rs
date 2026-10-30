@@ -3,7 +3,8 @@ use std::{fs::File, io::Read, path::Path};
 use color_eyre::eyre::Result;
 use librtdbg::{
     api::{Request, Response},
-    runtime_connection::{connect, send_request},
+    comms::send_request,
+    os::{NativeRuntimeProvider, RuntimeProvider},
     script::ScriptId,
 };
 
@@ -19,7 +20,7 @@ pub fn load_script(pid: i32, path: &Path) -> Result<()> {
     };
 
     // Create the connection
-    let mut socket = connect(pid as u32)?;
+    let mut socket = NativeRuntimeProvider::connect_socket(pid as u32)?;
 
     let response = send_request(&mut socket, &load_script_req)?;
 
@@ -38,7 +39,7 @@ pub fn unload_script(pid: i32, script_id: &ScriptId) -> Result<()> {
         script_id: *script_id,
     };
 
-    let mut socket = connect(pid as u32)?;
+    let mut socket = NativeRuntimeProvider::connect_socket(pid as u32)?;
 
     let response = send_request(&mut socket, &request)?;
 
@@ -55,7 +56,7 @@ pub fn script_functions(pid: i32, script_id: &ScriptId) -> Result<()> {
         script_id: *script_id,
     };
 
-    let mut socket = connect(pid as u32)?;
+    let mut socket = NativeRuntimeProvider::connect_socket(pid as u32)?;
 
     let response = send_request(&mut socket, &request)?;
 
@@ -88,7 +89,7 @@ pub fn run_function(
         parameter,
     };
 
-    let mut socket = connect(pid as u32)?;
+    let mut socket = NativeRuntimeProvider::connect_socket(pid as u32)?;
 
     let response = send_request(&mut socket, &request)?;
 

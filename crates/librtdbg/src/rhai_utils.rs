@@ -31,10 +31,23 @@ macro_rules! register_types {
 #[macro_export]
 macro_rules! register_modules {
     ($engine:expr, {$($enum:ident),+}) => {
+        use paste::paste;
         $(
             paste! {
                 $engine.register_type_with_name::<$enum>(stringify!($enum))
                     .register_static_module(stringify!($enum), exported_module!([<$enum:lower _module>]).into());
+            }
+        )+
+    };
+}
+
+#[macro_export]
+macro_rules! register_submodules {
+    ($parent:expr, {$($enum:ident),+}) => {
+        use paste::paste;
+        $(
+            paste! {
+                $parent.set_sub_module(stringify!($enum), exported_module!([<$enum:lower _module>]));
             }
         )+
     };

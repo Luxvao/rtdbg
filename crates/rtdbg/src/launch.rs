@@ -1,14 +1,18 @@
 use std::{path::PathBuf, process::Command};
 
 use color_eyre::Result;
-use librtdbg::runtime_extract::extract;
+use librtdbg::extract::extract_runtime;
 
 pub fn launch(program: PathBuf) -> Result<()> {
-    let runtime_path = extract()?;
+    let runtime_path = extract_runtime()?;
 
-    let status = Command::new(program)
+    let mut child = Command::new(program)
         .env("LD_PRELOAD", runtime_path)
-        .status()?;
+        .spawn()?;
+
+    println!("PID: {}", child.id());
+
+    let status = child.wait()?;
 
     println!("{:?}", status);
 

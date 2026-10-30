@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     io::{BufRead, BufReader},
     os::unix::net::UnixStream,
     process::{Command, Stdio},
@@ -7,15 +8,18 @@ use std::{
 
 use librtdbg::{
     error::Error,
-    runtime_connection::{connect, wait_for_socket},
-    runtime_extract::extract,
+    extract::extract_runtime,
+    os::{NativeRuntimeProvider, RuntimeProvider},
 };
 
-pub fn launch(path: &str, stdout: Arc<Mutex<String>>) -> Result<(UnixStream, u32), Error> {
-    let runtime = extract()?;
+pub fn launch(
+    path: &str,
+    stdout: Arc<Mutex<VecDeque<String>>>,
+) -> Result<(UnixStream, u32), Error> {
+    let runtime_path = extract_runtime()?;
 
     let command_handle = Command::new(&path)
-        .env("LD_PRELOAD", runtime)
+        .env("LD_PRELOAD", runtime_path)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .spawn()?;
@@ -32,7 +36,7 @@ pub fn launch(path: &str, stdout: Arc<Mutex<String>>) -> Result<(UnixStream, u32
                 && v > 0
             {
                 match stdout.lock() {
-                    Ok(mut l) => l.push_str(&line),
+                    Ok(mut l) => l.push_front(std::mem::take(&mut line)),
                     Err(_) => break,
                 }
 
@@ -41,7 +45,7 @@ pub fn launch(path: &str, stdout: Arc<Mutex<String>>) -> Result<(UnixStream, u32
         });
     }
 
-    let _ = wait_for_socket(pid);
+    let _ = NativeRuntimeProvider::wait_for_socket(pid);
 
-    Ok((connect(pid)?, pid))
+    Ok((NativeRuntimeProvider::connect_socket(pid)?, pid))
 }

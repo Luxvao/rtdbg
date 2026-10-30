@@ -2,8 +2,8 @@ use std::os::unix::net::UnixStream;
 
 use librtdbg::{
     api::{Request, Response},
+    comms::send_request,
     error::Error,
-    runtime_connection::send_request,
     script::ScriptId,
 };
 

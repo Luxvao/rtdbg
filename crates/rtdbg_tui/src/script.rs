@@ -1,9 +1,7 @@
-use std::{fs::File, io::Read, path::PathBuf, str::FromStr};
+use std::{fs::File, io::Read, path::Path};
 
-pub fn load_from_disk(path: &str) -> std::io::Result<(String, String)> {
-    let path = PathBuf::from_str(path).unwrap();
-
-    let mut file = File::open(&path)?;
+pub fn load_from_disk(path: &Path) -> std::io::Result<(String, String)> {
+    let mut file = File::open(path)?;
 
     let mut buffer = String::new();
 

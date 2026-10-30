@@ -1,13 +1,9 @@
-use std::{collections::HashMap, os::raw::c_void, sync::LazyLock};
+use std::{collections::HashMap, sync::LazyLock};
 
 use imep::{
-    Class, ElfHeader, ElfRel, ElfRela, ElfSym, ElfType, Endianness, Machine, OsAbi, ProgramHeader,
-    ProgramType, RelocType,
-    enum_rhai_impl::*,
-    parser::{ElfParser, Libc, ParseInfo},
+    ElfHeader, ElfRel, ElfRela, ElfSym, ProgramHeader, ProgramType, RelocType, rhai_enum_impl::*,
 };
-use imp_core::{ImportSlot, Parser};
-use paste::paste;
+use imp_core::{ImportSlot, Module, ObjectFormat, Parser, rhai_enum_impl::*};
 
 use librtdbg::{
     arch::amd64::Amd64RegisterSnapshot,
@@ -16,11 +12,14 @@ use librtdbg::{
         self, CallControl, HookId, HookOrder, HookPhase, HookStatus, ImportId, attach_hook,
         hookphase_module, hookstatus_module, patch_import,
     },
+    os::{
+        NATIVE_PARSER_EXTRA, NativeParser,
+        linux::{linux_module, process::LinuxProcess},
+    },
     parameter::{
         Parameter, ParameterLocation, ParameterValue, parameter_module, parameterlocation_module,
         parametervalue_module,
     },
-    proc_utils::{Permissions, Process, Vma, Vmas},
     register::{Register, register_module},
     register_modules, register_types,
     script::{ScriptCallback, ScriptId, Store},
@@ -37,30 +36,32 @@ pub static RTDBG_PACKAGE: LazyLock<RtdbgPackage> = LazyLock::new(RtdbgPackage::n
 def_package! {
     pub RtdbgPackage(module) : StandardPackage {
         // Functions
-        FuncRegistration::new("get_proc_info").set_into_module(module, get_proc_info);
-        FuncRegistration::new("get_elf_header").set_into_module(module, get_elf_header);
-        FuncRegistration::new("get_vmas").set_into_module(module, get_vmas);
         FuncRegistration::new("read_mem").set_into_module(module, read_mem);
         FuncRegistration::new("write_mem").set_into_module(module, write_mem_arr);
         FuncRegistration::new("write_mem").set_into_module(module, write_mem_string);
-        FuncRegistration::new("mprotect").set_into_module(module, mprotect_rhai);
 
-        // Hooks and stuff
-        FuncRegistration::new("get_import_slots").set_into_module(module, get_import_slots);
+        // Module
+        FuncRegistration::new("modules").set_into_module(module, modules);
+
+        // Import slots
+        FuncRegistration::new("import_slots").set_into_module(module, import_slots);
+        FuncRegistration::new("find_import_slots").set_into_module(module, find_import_slots_module);
+        FuncRegistration::new("find_import_slots").set_into_module(module, find_import_slots_module_path);
+
+        // Hook status
         FuncRegistration::new("set_hook_status").set_into_module(module, set_hook_status);
+
+        // Hook registration
         FuncRegistration::new("attach_hook").set_into_module(module, attach_hook_import_id_vec);
         FuncRegistration::new("attach_hook").set_into_module(module, attach_hook_import_id_map);
         FuncRegistration::new("attach_hook").set_into_module(module, attach_hook_import_slot_vec);
         FuncRegistration::new("attach_hook").set_into_module(module, attach_hook_import_slot_map);
         FuncRegistration::new("detach_hook").set_into_module(module, detach_hook);
 
+        #[cfg(target_os = "linux")]
+        module.set_var("OS", "Linux");
+
         // Constants
-        module.set_var("PROT_NONE", libc::PROT_NONE);
-        module.set_var("PROT_READ", libc::PROT_READ);
-        module.set_var("PROT_WRITE", libc::PROT_WRITE);
-        module.set_var("PROT_EXEC", libc::PROT_EXEC);
-        module.set_var("PROT_GROWSUP", libc::PROT_GROWSUP);
-        module.set_var("PROT_GROWSDOWN", libc::PROT_GROWSDOWN);
     } |> |engine| {
         engine.on_print(|s| println!("{s}"));
         engine.on_debug(|s, source, pos| {
@@ -73,35 +74,58 @@ def_package! {
 }
 
 pub fn setup_types(engine: &mut Engine) {
-    register_types!(engine, { Permissions, Vma, Vmas, Process, ImportSlot, ElfHeader, ProgramHeader, ElfSym, ElfRel, ElfRela, Store, Amd64RegisterSnapshot, ImportId, HookId, HookOrder, CallControl, Parameter });
+    register_types!(engine, {
+        // ELF structures
+        ElfHeader,
+        ProgramHeader,
+        ElfSym,
+        ElfRel,
+        ElfRela,
+
+        // Linux
+        LinuxProcess,
+
+        // Import handling and modules
+        ImportSlot,
+        ImportId,
+        Module,
+
+        // Hooking
+        HookId,
+        HookOrder,
+        CallControl,
+        Parameter,
+
+        // Runtime state
+        Store,
+        Amd64RegisterSnapshot
+    });
 }
 
 pub fn setup_modules(engine: &mut Engine) {
-    register_modules!(engine, { Class, Endianness, OsAbi, ElfType, Machine, ProgramType, RelocType, Register, HookPhase, HookStatus, ParameterValue, ParameterLocation, Parameter });
-}
+    #[cfg(target_os = "linux")]
+    linux_module(engine);
 
-// Get process info
-fn get_proc_info() -> Result<Process, Box<EvalAltResult>> {
-    Process::this().map_err(|e| format!("{e}").into())
-}
+    register_modules!(engine, {
+        // Generic parsing structures
+        ObjectFormat,
 
-// Get maps info
-fn get_vmas() -> Result<Vmas, Box<EvalAltResult>> {
-    Vmas::this().map_err(|e| format!("{e}").into())
-}
+        // Program headers and relocations
+        ProgramType,
+        RelocType,
 
-// Get ELF header
-fn get_elf_header() -> Result<ElfHeader, Box<EvalAltResult>> {
-    let proc_info = get_proc_info()?;
+        // CPU state
+        Register,
 
-    let header_address = proc_info
-        .vmas
-        .iter()
-        .find(|vma| vma.path.eq(&Some(proc_info.path.clone())) && vma.offset == 0)
-        .ok_or("Unable to find ELF header")?
-        .saddy;
+        // Hooking
+        HookPhase,
+        HookStatus,
 
-    Ok(unsafe { ElfHeader::parse_at(header_address).map_err(|_| "Unable to parse ELF header")? })
+        // Parameter system
+        Parameter,
+        ParameterValue,
+        ParameterLocation
+    });
 }
 
 // Reading a specific amount of data from an address into an array
@@ -131,44 +155,50 @@ fn write_mem_arr(addy: i64, new: Vec<u8>) {
     }
 }
 
-// Writing a string to a specific address
+// Writing a string (null terminated) to a specific address
 fn write_mem_string(addy: i64, new: String) {
-    let new = new.as_bytes();
+    let mut new = new.into_bytes();
+
+    new.push(b'\0');
 
     write_mem_arr(addy, new.into());
 }
 
-// Mprotect wrapped for rhai - handles page boundaries itself
-fn mprotect_rhai(addy: i64, size: i64, prot: i32) -> i64 {
-    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-
-    let offset = addy % page_size;
-
-    let addy_aligned = addy - offset;
-
-    let size_with_adjustments = size + offset;
-
-    unsafe {
-        i64::from(libc::mprotect(
-            addy_aligned as *mut c_void,
-            size_with_adjustments as usize,
-            prot,
-        ))
-    }
+// Get all modules
+fn modules() -> Dynamic {
+    Dynamic::from_array(
+        NativeParser::modules(NATIVE_PARSER_EXTRA)
+            .map(|i| Dynamic::from(i))
+            .collect(),
+    )
 }
 
 // Get every import slot for all modules to then match on
-fn get_import_slots() -> Dynamic {
-    // Hardcode imep for now
-    let parse_info = ParseInfo::new(
-        Libc::COMPILED_WITH,
-        Class::NATIVE,
-        Endianness::NATIVE,
-        Machine::NATIVE,
-    );
-
+fn import_slots() -> Dynamic {
     Dynamic::from_array(
-        ElfParser::import_slots(parse_info)
+        NativeParser::import_slots(NATIVE_PARSER_EXTRA)
+            .map(|i| Dynamic::from(i))
+            .collect(),
+    )
+}
+
+// Return a vector of import slots matching module paths and import names
+fn find_import_slots_module_path(module_path: String, import_name: String) -> Dynamic {
+    Dynamic::from_array(
+        NativeParser::import_slots(NATIVE_PARSER_EXTRA)
+            .filter(|i| {
+                i.module_path.as_deref() == Some(&module_path) && i.import_name == import_name
+            })
+            .map(|i| Dynamic::from(i))
+            .collect(),
+    )
+}
+
+// Return a vector of import slots matching module paths and import names (taking a Module struct instead)
+fn find_import_slots_module(module: Module, import_name: String) -> Dynamic {
+    Dynamic::from_array(
+        NativeParser::import_slots(NATIVE_PARSER_EXTRA)
+            .filter(|i| i.module_path == module.path && i.import_name == import_name)
             .map(|i| Dynamic::from(i))
             .collect(),
     )

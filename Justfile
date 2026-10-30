@@ -32,12 +32,17 @@ build_gui: runtime
 build_tui: runtime
     cargo build --release -p rtdbg_tui
 
-# Run the main binary, passing the parameters
+# Run the main binary, passing the arguments
 cli *args: build
     cargo run --release -p rtdbg -- {{args}}
 
-tui: build_tui
-    cargo run --release -p rtdbg_tui
+# Run the tui, passing in the arguments
+tui *args: build_tui
+    cargo run --release -p rtdbg_tui -- {{args}}
+
+# Run the tui with scripts (rhai examples passed in)
+tui_ws:
+    just tui --scripts ./rhai_examples
 
 # Run the main GUI app
 gui: build_gui

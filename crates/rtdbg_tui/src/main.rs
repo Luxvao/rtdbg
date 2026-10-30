@@ -1,5 +1,8 @@
+#![feature(vec_try_remove)]
+
 use color_eyre::eyre::Result;
 
+mod cli;
 mod components;
 mod inject;
 mod script;
@@ -8,5 +11,5 @@ mod tui;
 
 fn main() -> Result<()> {
     color_eyre::install()?;
-    tui::init()
+    cli::init()
 }

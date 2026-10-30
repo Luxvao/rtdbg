@@ -1,6 +1,6 @@
 use std::ffi::{CStr, c_int, c_void};
 
-use imp_core::{ImportSlot, Parser};
+use imp_core::{ImportSlot, Module, ObjectFormat, Parser};
 use libc::{dl_phdr_info, size_t};
 
 use crate::{
@@ -38,8 +38,22 @@ impl Parser for ElfParser {
 
         unsafe {
             libc::dl_iterate_phdr(
-                Some(phdr_callback),
+                Some(phdr_callback_get_slots),
                 (&mut data) as *mut (Vec<ImportSlot>, ParseInfo) as *mut c_void,
+            );
+        }
+
+        data.0.into_iter()
+    }
+
+    fn modules<ParseInfo>(extra: ParseInfo) -> impl Iterator<Item = imp_core::Module> {
+        // The boolean is the same thing as first_run in ParseInfo
+        let mut data: (Vec<Module>, ParseInfo) = (Vec::new(), extra);
+
+        unsafe {
+            libc::dl_iterate_phdr(
+                Some(phdr_callback_modules),
+                (&mut data) as *mut (Vec<Module>, ParseInfo) as *mut c_void,
             );
         }
 
@@ -48,7 +62,12 @@ impl Parser for ElfParser {
 }
 
 impl ParseInfo {
-    pub fn new(libc: Libc, class: Class, endianness: Endianness, machine: Machine) -> ParseInfo {
+    pub const fn new(
+        libc: Libc,
+        class: Class,
+        endianness: Endianness,
+        machine: Machine,
+    ) -> ParseInfo {
         ParseInfo {
             libc,
             class,
@@ -67,7 +86,11 @@ impl Libc {
     };
 }
 
-extern "C" fn phdr_callback(info: *mut dl_phdr_info, _: size_t, data: *mut c_void) -> c_int {
+extern "C" fn phdr_callback_get_slots(
+    info: *mut dl_phdr_info,
+    _: size_t,
+    data: *mut c_void,
+) -> c_int {
     let (slots, parse_info) = unsafe { &mut *(data as *mut (Vec<ImportSlot>, ParseInfo)) };
 
     let info = unsafe { &*info };
@@ -76,13 +99,15 @@ extern "C" fn phdr_callback(info: *mut dl_phdr_info, _: size_t, data: *mut c_voi
     let module_name = if parse_info.first_run {
         // On both glibc and musl it's the first entry
         parse_info.first_run = false;
-        "<main>".to_string()
+        Some("<main>".to_string())
     } else {
-        unsafe {
+        let str = unsafe {
             CStr::from_ptr(info.dlpi_name)
                 .to_string_lossy()
                 .into_owned()
-        }
+        };
+
+        if str.is_empty() { None } else { Some(str) }
     };
 
     // glibc patches _DYNAMIC already so we don't have to add anything
@@ -220,7 +245,7 @@ extern "C" fn phdr_callback(info: *mut dl_phdr_info, _: size_t, data: *mut c_voi
 
                 slots.push(ImportSlot {
                     import_name: symbol,
-                    module_name: module_name.clone(),
+                    module_path: module_name.clone(),
                     ptr: address,
                 });
             }
@@ -262,7 +287,7 @@ extern "C" fn phdr_callback(info: *mut dl_phdr_info, _: size_t, data: *mut c_voi
 
                 slots.push(ImportSlot {
                     import_name: symbol,
-                    module_name: module_name.clone(),
+                    module_path: module_name.clone(),
                     ptr: address,
                 });
             }
@@ -306,11 +331,77 @@ extern "C" fn phdr_callback(info: *mut dl_phdr_info, _: size_t, data: *mut c_voi
 
                 slots.push(ImportSlot {
                     import_name: symbol,
-                    module_name: module_name.clone(),
+                    module_path: module_name.clone(),
                     ptr: address,
                 });
             }
         }
+    }
+
+    0
+}
+
+extern "C" fn phdr_callback_modules(
+    info: *mut dl_phdr_info,
+    _: size_t,
+    data: *mut c_void,
+) -> c_int {
+    let (modules, parse_info) = unsafe { &mut *(data as *mut (Vec<Module>, ParseInfo)) };
+
+    let info = unsafe { &*info };
+
+    let ph_size = match parse_info.class {
+        Class::Bits32 => size_of::<ProgramHeaderRaw32Bit>(),
+        Class::Bits64 => size_of::<ProgramHeaderRaw64Bit>(),
+    };
+
+    let module_path = unsafe {
+        let str = CStr::from_ptr(info.dlpi_name)
+            .to_string_lossy()
+            .into_owned();
+
+        if str.is_empty() { None } else { Some(str) }
+    };
+
+    let mut min_start = None;
+    let mut max_end = None;
+
+    for i in 0..info.dlpi_phnum {
+        let ph_address = info.dlpi_phdr as u64 + i as u64 * ph_size as u64;
+
+        let program_header =
+            unsafe { ProgramHeader::parse_at(ph_address, parse_info.class, parse_info.endianness) };
+
+        if program_header.p_type == ProgramType::PtLoad {
+            if min_start.is_none() && max_end.is_none() {
+                min_start = Some(program_header.vaddr);
+                max_end = Some(program_header.vaddr + program_header.memsz);
+
+                continue;
+            }
+
+            min_start = min_start.map(|v| v.min(program_header.vaddr));
+            max_end = max_end.map(|v| v.max(program_header.vaddr + program_header.memsz));
+        }
+    }
+
+    if let Some(min_start) = min_start
+        && let Some(max_end) = max_end
+    {
+        let module = Module {
+            path: module_path,
+            base: info.dlpi_phdr as u64 + min_start,
+            bias: info.dlpi_phdr as u64,
+            size: max_end - min_start,
+            format: ObjectFormat::Elf,
+            is_main: parse_info.first_run,
+        };
+
+        modules.push(module);
+    }
+
+    if parse_info.first_run {
+        parse_info.first_run = false;
     }
 
     0

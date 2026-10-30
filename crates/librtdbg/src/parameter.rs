@@ -59,15 +59,15 @@ impl Parameter {
             .on_debug(|v| format!("{v:?}"));
     }
 
-    fn rhai_integer_indexer_get(&mut self, index: i64) -> Dynamic {
+    fn rhai_integer_indexer_get(&mut self, index: i64) -> Result<Dynamic, Box<EvalAltResult>> {
         if let ParameterValue::Ptr(_, ref p) = self.value {
             return match p.get(index as usize) {
-                Some(v) => Dynamic::from(v.clone()),
-                None => Dynamic::UNIT,
+                Some(v) => Ok(Dynamic::from(v.clone())),
+                None => Err("index out of bounds".into()),
             };
         }
 
-        Dynamic::UNIT
+        Err("cannot index non-Ptr Parameter".into())
     }
 
     fn rhai_integer_indexer_set(
@@ -78,35 +78,44 @@ impl Parameter {
         if let ParameterValue::Ptr(_, ref mut p) = self.value {
             let index = index as usize;
 
-            if index > p.len() {
-                return Err("Index out of bounds".into());
+            if index >= p.len() {
+                return Err("index out of bounds".into());
             }
 
-            p.insert(
-                index,
-                value.try_cast().ok_or("Setter on Ptr takes a Parameter")?,
-            );
+            p[index] = value.try_cast().ok_or("expected Parameter")?;
+
+            return Ok(());
         }
 
-        Ok(())
+        Err("cannot index non-Ptr Parameter".into())
     }
 
-    fn rhai_string_indexer_get(&mut self, index: &str) -> Dynamic {
+    fn rhai_string_indexer_get(&mut self, index: &str) -> Result<Dynamic, Box<EvalAltResult>> {
         if index == "parameter_location" {
-            return Dynamic::from(self.location);
+            return Ok(Dynamic::from(self.location));
         }
 
         if index == "parameter_value" {
-            return Dynamic::from(self.value.clone());
+            return Ok(Dynamic::from(self.value.clone()));
         }
 
-        match self.value {
-            ParameterValue::NamedPtr(_, ref h) => {
-                return match h.get(index) {
-                    Some(p) => Dynamic::from(p.clone()),
-                    None => Dynamic::UNIT,
-                };
-            }
+        Ok(match self.value {
+            ParameterValue::NamedPtr(_, ref h) => match h.get(index) {
+                Some(p) => Dynamic::from(p.clone()),
+                None => return Err(format!("no such field `{}`", index).into()),
+            },
+            ParameterValue::Ptr(_, ref mut v) => match v.as_mut_slice() {
+                [only] => {
+                    return only.rhai_string_indexer_get(index);
+                }
+                _ => {
+                    return Err(format!(
+                        "Ptr passthrough need a single pointee, found {} children",
+                        v.len()
+                    )
+                    .into());
+                }
+            },
             ParameterValue::U8(Some(v)) if index == "val" => Dynamic::from(v),
             ParameterValue::U16(Some(v)) if index == "val" => Dynamic::from(v),
             ParameterValue::U32(Some(v)) if index == "val" => Dynamic::from(v),
@@ -118,9 +127,9 @@ impl Parameter {
             ParameterValue::F32(Some(v)) if index == "val" => Dynamic::from(v),
             ParameterValue::F64(Some(v)) if index == "val" => Dynamic::from(v),
             ParameterValue::CStr(Some(ref v)) if index == "val" => Dynamic::from(v.to_string()),
-            ParameterValue::Ptr(_, ref v) if index == "val" => v.clone().into(),
-            _ => Dynamic::UNIT,
-        }
+            _ if index == "val" => return Err("value not resolved".into()),
+            _ => return Err("cannot string index non-NamedPtr Parameter".into()),
+        })
     }
 
     fn rhai_string_indexer_set(
@@ -129,26 +138,20 @@ impl Parameter {
         value: Dynamic,
     ) -> Result<(), Box<EvalAltResult>> {
         if index == "parameter_location" {
-            self.location = value
-                .try_cast()
-                .ok_or("parameter_location takes a ParameterLocation")?;
+            self.location = value.try_cast().ok_or("expected ParameterLocation")?;
 
             return Ok(());
         }
 
         if index == "parameter_value" {
-            self.value = value
-                .try_cast()
-                .ok_or("parameter_value takes a ParameterValue")?;
+            self.value = value.try_cast().ok_or("expected ParameterValue")?;
 
             return Ok(());
         }
 
         match self.value {
             ParameterValue::NamedPtr(_, ref mut h) => {
-                let parameter = value
-                    .try_cast()
-                    .ok_or("Setter on a NamedPtr takes a Parameter")?;
+                let parameter = value.try_cast().ok_or("expected Parameter")?;
 
                 match h.entry(index.to_string()) {
                     std::collections::hash_map::Entry::Occupied(mut e) => {
@@ -159,10 +162,20 @@ impl Parameter {
                     }
                 }
             }
+            ParameterValue::Ptr(_, ref mut v) => match v.as_mut_slice() {
+                [only] => return only.rhai_string_indexer_set(index, value),
+                _ => {
+                    return Err(format!(
+                        "Ptr passthrough need a single pointee, found {} children",
+                        v.len()
+                    )
+                    .into());
+                }
+            },
             ref mut a if index == "val" => {
-                *a = value.try_cast().ok_or("Setter takes a ParameterValue")?
+                *a = value.try_cast().ok_or("expected ParameterValue")?
             }
-            _ => (),
+            _ => return Err("cannot string index non-NamedPtr Parameter".into()),
         }
 
         Ok(())
@@ -415,19 +428,19 @@ pub mod parametervalue_module {
     #[rhai_fn(global, get = "field_0", pure)]
     pub fn get_field_0(paramv: &mut ParameterValue) -> Dynamic {
         match paramv {
-            ParameterValue::U8(Some(v)) => Dynamic::from(*v),
-            ParameterValue::U16(Some(v)) => Dynamic::from(*v),
-            ParameterValue::U32(Some(v)) => Dynamic::from(*v),
-            ParameterValue::U64(Some(v)) => Dynamic::from(*v),
-            ParameterValue::I8(Some(v)) => Dynamic::from(*v),
-            ParameterValue::I16(Some(v)) => Dynamic::from(*v),
-            ParameterValue::I32(Some(v)) => Dynamic::from(*v),
-            ParameterValue::I64(Some(v)) => Dynamic::from(*v),
-            ParameterValue::F32(Some(v)) => Dynamic::from(*v),
-            ParameterValue::F64(Some(v)) => Dynamic::from(*v),
-            ParameterValue::CStr(Some(v)) => Dynamic::from(v.clone()),
-            ParameterValue::Ptr(Some(v), _) => Dynamic::from(*v),
-            ParameterValue::NamedPtr(Some(v), _) => Dynamic::from(*v),
+            ParameterValue::U8(Some(v)) => Dynamic::from_int(*v as i64),
+            ParameterValue::U16(Some(v)) => Dynamic::from_int(*v as i64),
+            ParameterValue::U32(Some(v)) => Dynamic::from_int(*v as i64),
+            ParameterValue::U64(Some(v)) => Dynamic::from_int(*v as i64),
+            ParameterValue::I8(Some(v)) => Dynamic::from_int(*v as i64),
+            ParameterValue::I16(Some(v)) => Dynamic::from_int(*v as i64),
+            ParameterValue::I32(Some(v)) => Dynamic::from_int(*v as i64),
+            ParameterValue::I64(Some(v)) => Dynamic::from_int(*v),
+            ParameterValue::F32(Some(v)) => Dynamic::from_float(*v as f64),
+            ParameterValue::F64(Some(v)) => Dynamic::from_float(*v),
+            ParameterValue::CStr(Some(v)) => v.clone().into(),
+            ParameterValue::Ptr(Some(v), _) => Dynamic::from_int(*v as i64),
+            ParameterValue::NamedPtr(Some(v), _) => Dynamic::from_int(*v as i64),
             _ => Dynamic::UNIT,
         }
     }

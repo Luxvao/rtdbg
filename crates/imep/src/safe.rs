@@ -1,6 +1,6 @@
 use std::ptr::read_unaligned;
 
-use imp_core::Error;
+use imp_core::error::Error;
 use rhai::{CustomType, TypeBuilder};
 
 use crate::raw::{
@@ -413,7 +413,7 @@ pub struct ElfRela {
 }
 
 impl TryFrom<u8> for Class {
-    type Error = imp_core::Error;
+    type Error = imp_core::error::Error;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -425,7 +425,7 @@ impl TryFrom<u8> for Class {
 }
 
 impl TryFrom<u8> for Endianness {
-    type Error = imp_core::Error;
+    type Error = imp_core::error::Error;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -467,7 +467,7 @@ impl From<u32> for ProgramFlags {
 }
 
 impl TryFrom<ElfHeaderRaw32Bit> for ElfHeader {
-    type Error = imp_core::Error;
+    type Error = imp_core::error::Error;
 
     fn try_from(mut value: ElfHeaderRaw32Bit) -> Result<Self, Self::Error> {
         if value.magic != [0x7F, b'E', b'L', b'F'] {
@@ -500,7 +500,7 @@ impl TryFrom<ElfHeaderRaw32Bit> for ElfHeader {
 }
 
 impl TryFrom<ElfHeaderRaw64Bit> for ElfHeader {
-    type Error = imp_core::Error;
+    type Error = imp_core::error::Error;
 
     fn try_from(mut value: ElfHeaderRaw64Bit) -> Result<Self, Self::Error> {
         if value.magic != [0x7F, b'E', b'L', b'F'] {

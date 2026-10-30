@@ -110,7 +110,7 @@ pub mod osabi_module {
             OsAbi::FenixOS => Dynamic::UNIT,
             OsAbi::NuxiCloudABI => Dynamic::UNIT,
             OsAbi::StratusTechnologiesOpenVOS => Dynamic::UNIT,
-            OsAbi::Unknown(raw) => Dynamic::from(*raw as i64),
+            OsAbi::Unknown(raw) => Dynamic::from_int(*raw as i64),
         }
     }
 
@@ -150,7 +150,7 @@ pub mod osabi_module {
 pub mod elftype_module {
     use crate::ElfType;
 
-    use super::*;
+    use crate::rhai_enum_impl::*;
     pub const EtNone: ElfType = ElfType::EtNone;
     pub const EtRel: ElfType = ElfType::EtRel;
     pub const EtExec: ElfType = ElfType::EtExec;
@@ -193,7 +193,7 @@ pub mod elftype_module {
             ElfType::EtHios => Dynamic::UNIT,
             ElfType::EtLoproc => Dynamic::UNIT,
             ElfType::EtHiproc => Dynamic::UNIT,
-            ElfType::Unknown(raw) => Dynamic::from(*raw as i64),
+            ElfType::Unknown(raw) => Dynamic::from_int(*raw as i64),
         }
     }
 
@@ -446,7 +446,7 @@ pub mod machine_module {
             Machine::BerkeleyPacketFilter => Dynamic::UNIT,
             Machine::Wdc65C816 => Dynamic::UNIT,
             Machine::LoongArch => Dynamic::UNIT,
-            Machine::Unknown(raw) => Dynamic::from(*raw as i64),
+            Machine::Unknown(raw) => Dynamic::from_int(*raw as i64),
         }
     }
 
@@ -616,7 +616,7 @@ pub mod programtype_module {
             ProgramType::PtHios => Dynamic::UNIT,
             ProgramType::PtLoproc => Dynamic::UNIT,
             ProgramType::PtHiproc => Dynamic::UNIT,
-            ProgramType::Unknown(raw) => Dynamic::from(*raw as i64),
+            ProgramType::Unknown(raw) => Dynamic::from_int(*raw as i64),
         }
     }
 
@@ -945,7 +945,7 @@ pub mod reloctype_module {
             RelocType::Sub16 => Dynamic::UNIT,
             RelocType::Sub32 => Dynamic::UNIT,
             RelocType::Sub64 => Dynamic::UNIT,
-            RelocType::Unknown(raw) => Dynamic::from(*raw as i64),
+            RelocType::Unknown(raw) => Dynamic::from_int(*raw as i64),
         }
     }
 
@@ -1445,77 +1445,77 @@ pub mod elfdyn_module {
             ElfDyn::Symbolic => Dynamic::UNIT,
             ElfDyn::TextRel => Dynamic::UNIT,
             ElfDyn::BindNow => Dynamic::UNIT,
-            ElfDyn::Needed(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::PltRelSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::PltGot(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Hash(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::StrTab(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SymTab(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Rela(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::RelaSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::RelaEnt(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::StrSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SymEnt(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Init(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Fini(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SoName(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::RPath(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Rel(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::RelSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::RelEnt(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::PltRel(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Debug(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::JmpRel(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::InitArray(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::FiniArray(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::InitArraySz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::FiniArraySz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::RunPath(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Flags(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::PreInitArray(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::PreInitArraySz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwAuxiliary(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwRtldInf(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwFilter(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwCap(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwSymTab(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwSymSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwSortEnt(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwSymSort(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwSymSortSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwTlsSort(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwTlsSortSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwCapInfo(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwStrPad(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwCapChain(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwLdMach(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwCapChainEnt(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SunwCapChainSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Checksum(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::PltPadSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::MoveEnt(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::MoveSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::PosFlag1(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SymInSz(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SymInEnt(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Config(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::DepAudit(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Audit(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::PltPad(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::MoveTab(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SymInfo(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::RelaCount(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::RelCount(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Flags1(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::VerDef(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::VerDefNum(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::VerNeed(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::VerNeedNum(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::SparcRegister(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Auxiliary(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Used(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Filter(raw) => Dynamic::from(*raw as i64),
-            ElfDyn::Unknown { tag, .. } => Dynamic::from(*tag),
+            ElfDyn::Needed(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::PltRelSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::PltGot(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Hash(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::StrTab(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SymTab(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Rela(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::RelaSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::RelaEnt(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::StrSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SymEnt(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Init(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Fini(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SoName(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::RPath(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Rel(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::RelSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::RelEnt(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::PltRel(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Debug(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::JmpRel(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::InitArray(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::FiniArray(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::InitArraySz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::FiniArraySz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::RunPath(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Flags(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::PreInitArray(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::PreInitArraySz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwAuxiliary(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwRtldInf(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwFilter(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwCap(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwSymTab(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwSymSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwSortEnt(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwSymSort(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwSymSortSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwTlsSort(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwTlsSortSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwCapInfo(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwStrPad(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwCapChain(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwLdMach(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwCapChainEnt(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SunwCapChainSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Checksum(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::PltPadSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::MoveEnt(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::MoveSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::PosFlag1(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SymInSz(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SymInEnt(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Config(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::DepAudit(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Audit(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::PltPad(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::MoveTab(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SymInfo(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::RelaCount(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::RelCount(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Flags1(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::VerDef(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::VerDefNum(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::VerNeed(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::VerNeedNum(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::SparcRegister(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Auxiliary(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Used(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Filter(raw) => Dynamic::from_int(*raw as i64),
+            ElfDyn::Unknown { tag, .. } => Dynamic::from_int(*tag),
         }
     }
 
@@ -1816,7 +1816,7 @@ pub mod elfdyn_module {
     #[rhai_fn(global, get = "field_1", pure)]
     pub fn get_field_1(value: &mut ElfDyn) -> Dynamic {
         match value {
-            ElfDyn::Unknown { val, .. } => Dynamic::from(*val as i64),
+            ElfDyn::Unknown { val, .. } => Dynamic::from_int(*val as i64),
             _ => Dynamic::UNIT,
         }
     }
@@ -1835,7 +1835,7 @@ pub mod elfdyn_module {
     #[rhai_fn(global, get = "tag", pure)]
     pub fn get_tag(value: &mut ElfDyn) -> Dynamic {
         match value {
-            ElfDyn::Unknown { tag, .. } => Dynamic::from(*tag),
+            ElfDyn::Unknown { tag, .. } => Dynamic::from_int(*tag),
             _ => Dynamic::UNIT,
         }
     }
@@ -1854,7 +1854,7 @@ pub mod elfdyn_module {
     #[rhai_fn(global, get = "val", pure)]
     pub fn get_val(value: &mut ElfDyn) -> Dynamic {
         match value {
-            ElfDyn::Unknown { val, .. } => Dynamic::from(*val as i64),
+            ElfDyn::Unknown { val, .. } => Dynamic::from_int(*val as i64),
             _ => Dynamic::UNIT,
         }
     }

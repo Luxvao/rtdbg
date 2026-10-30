@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::time::Duration;
 
 fn main() {
     let output_string = "Hello World!";
@@ -6,11 +6,8 @@ fn main() {
     println!("Output string pointer: {output_string:p}");
 
     loop {
-        let mut buf = [0; 1];
-
         println!("{output_string}");
-        std::io::stdin()
-            .read_exact(&mut buf)
-            .expect("Failed to read from stdin");
+
+        std::thread::sleep(Duration::from_secs(1));
     }
 }

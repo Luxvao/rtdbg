@@ -1,4 +1,4 @@
-use imp_core::Error;
+use imp_core::error::Error;
 
 use crate::safe::Endianness;
 
