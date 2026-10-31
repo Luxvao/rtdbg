@@ -19,8 +19,6 @@ pub mod parameter;
 pub mod register;
 pub mod rhai_utils;
 pub mod script;
-#[cfg(test)]
-mod tests;
 pub mod utils;
 
 pub static ID_GEN: AtomicU64 = AtomicU64::new(0);

@@ -2,10 +2,10 @@
 [default rel]
 
 trampoline:
+        endbr64
         stc
-        jmp .hook
 
-        .hook:
+.hook:
         ;; allocate space for xmm regs
         lea rsp, [rsp - 272]
 
@@ -75,18 +75,22 @@ trampoline:
 
         ;; if rax is -1 then we have to skip calling the original function
         cmp rax, -1
+        je .cancel
+
+        ;; if rax is 1 then we bail
+        cmp rax, 1
         je .restore
 
         ;; write what we got in rax to the return slot
         mov [rsp + 0x188], rax
 
-        ;; set carry again
-        neg rsi
+        ;; ZF, CF = 0
+        add rsi, -1
 
         ;; start the restore
         jmp .restore
 
-        .original:
+.original:
         ;; make sure we overwrite the return address
         add rsp, 8
 
@@ -100,7 +104,16 @@ trampoline:
         clc
         jmp .hook
 
-        .restore:
+.bail:
+        ;; if we run out of thread local storage for return addresses we bail
+        jmp qword [original_function]
+
+.cancel:
+        ;; cancel path
+        test rsp, rsp
+        jmp .restore
+
+.restore:
         ;; pop the registers
         pop r15
         pop r14
@@ -141,6 +154,9 @@ trampoline:
 
         ;; if carry then we should call the original
         jc .original
+
+        ;; if zero then we bail
+        jz .bail
 
         ;; now we return
         ret

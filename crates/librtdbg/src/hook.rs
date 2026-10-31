@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
     ptr,
     sync::{
@@ -12,7 +12,7 @@ use imp_core::ImportSlot;
 use libc::{
     _SC_PAGESIZE, MAP_ANONYMOUS, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE, mmap, sysconf,
 };
-use log::{error, warn};
+use log::warn;
 use rhai::{CustomType, EvalAltResult, TypeBuilder};
 
 use crate::{
@@ -266,8 +266,83 @@ impl CallControl {
     }
 }
 
+struct ThreadGuard {
+    prev: bool,
+}
+
+struct RetBuf<const SIZE: usize> {
+    len: usize,
+    ents: [(usize, usize); SIZE],
+}
+
+enum DispatcherReturn {
+    // Normal return path
+    Full(usize),
+    // Skip calling the original
+    Cancel,
+    // Bail if we ran out of return slots
+    Bail,
+}
+
+impl Drop for ThreadGuard {
+    fn drop(&mut self) {
+        THREAD_GUARD.with(|v| v.set(self.prev));
+    }
+}
+
+impl Into<isize> for DispatcherReturn {
+    fn into(self) -> isize {
+        match self {
+            DispatcherReturn::Full(a) => a as isize,
+            DispatcherReturn::Cancel => -1,
+            DispatcherReturn::Bail => 1,
+        }
+    }
+}
+
+impl ThreadGuard {
+    fn new() -> ThreadGuard {
+        THREAD_GUARD.with(|v| ThreadGuard {
+            prev: v.replace(true),
+        })
+    }
+
+    fn should_quit(&self) -> bool {
+        self.prev
+    }
+}
+
+impl<const SIZE: usize> RetBuf<SIZE> {
+    fn insert(&mut self, key: usize, ret: usize) -> bool {
+        if let Some(entry) = self.ents[..self.len].iter_mut().find(|i| i.0 == key) {
+            entry.1 = ret;
+            return false;
+        }
+
+        if self.len == SIZE {
+            return true;
+        }
+
+        self.ents[self.len] = (key, ret);
+
+        self.len += 1;
+
+        false
+    }
+
+    fn take(&mut self, key: usize) -> Option<usize> {
+        let i = self.ents[..self.len].iter().rposition(|e| e.0 == key)?;
+        let ret = self.ents[i].1;
+        self.ents[i] = self.ents[self.len - 1];
+        self.len -= 1;
+
+        Some(ret)
+    }
+}
+
 thread_local! {
-    static RETURN_ADDRESSES: RefCell<HashMap<usize, usize>> = RefCell::new(HashMap::new());
+    static RETURN_ADDRESSES: RefCell<RetBuf<128>> = RefCell::new(RetBuf { len: 0, ents: [(0, 0); 128] });
+    static THREAD_GUARD: Cell<bool> = Cell::new(false);
 }
 
 extern "C" fn dispatcher(
@@ -276,18 +351,32 @@ extern "C" fn dispatcher(
     register_snapshot: *mut arch::NativeRegisterStruct,
     original_return: usize,
     return_slot_address: usize,
-) -> usize {
-    let original_return = if is_prefix {
-        RETURN_ADDRESSES.with_borrow_mut(|v| v.insert(return_slot_address, original_return));
-        0
+) -> isize {
+    let return_value = if is_prefix {
+        if let Ok(false) = RETURN_ADDRESSES
+            .try_with(|v| v.borrow_mut().insert(return_slot_address, original_return))
+        {
+            DispatcherReturn::Full(0)
+        } else {
+            DispatcherReturn::Bail
+        }
     } else {
-        RETURN_ADDRESSES.with_borrow_mut(|v| {
-            v.remove(&return_slot_address).unwrap_or_else(|| {
-                error!("[HOOK DISPATCHER] Postfix hook hit but no return address available!");
-                0
-            })
-        })
+        if let Ok(Some(ret)) =
+            RETURN_ADDRESSES.try_with(|v| v.borrow_mut().take(return_slot_address))
+        {
+            DispatcherReturn::Full(ret)
+        } else {
+            // We're done for if we don't have the return address saved
+            std::process::abort();
+        }
     };
+
+    let thread_guard = ThreadGuard::new();
+
+    if thread_guard.should_quit() {
+        // If we're here then we're in a reentry loop and should not do anything else
+        return return_value.into();
+    }
 
     let reg_snapshot = unsafe { &mut *register_snapshot };
 
@@ -299,7 +388,7 @@ extern "C" fn dispatcher(
         Ok(g) => g,
         Err(e) => {
             warn!("[HOOK DISPATCHER] Hook resolution error: {e}");
-            return original_return;
+            return return_value.into();
         }
     };
 
@@ -307,7 +396,7 @@ extern "C" fn dispatcher(
         Some(hm) => hm,
         None => {
             warn!("[HOOK DISPATCHER] Illegal hook state!");
-            return original_return;
+            return return_value.into();
         }
     };
 
@@ -370,14 +459,9 @@ extern "C" fn dispatcher(
     if let Some(call_ctrl) = call_control
         && call_ctrl.is_cancelled()
     {
-        // We remove the return address from the hashmap
-        RETURN_ADDRESSES.with_borrow_mut(|v| {
-            v.remove(&return_slot_address);
-        });
-
-        usize::MAX
+        DispatcherReturn::Cancel.into()
     } else {
-        original_return
+        return_value.into()
     }
 }
 
@@ -567,4 +651,29 @@ pub fn set_hook_status(hook_id: HookId, status: HookStatus) -> Result<(), Error>
     }
 
     Err(Error::NoSuchHook(hook_id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retbuf_roundtrip() {
+        let mut b = RetBuf {
+            len: 0,
+            ents: [(0, 0); 128],
+        };
+        assert!(!b.insert(10, 100));
+        assert!(!b.insert(20, 200));
+        assert!(!b.insert(10, 111)); // overwrite, no growth
+        assert_eq!(b.len, 2);
+        assert_eq!(b.take(10), Some(111));
+        assert_eq!(b.take(10), None);
+        assert_eq!(b.take(20), Some(200));
+        assert_eq!(b.len, 0);
+        for i in 0..128 {
+            assert!(!b.insert(i + 1, i));
+        }
+        assert!(b.insert(999, 0)); // full
+    }
 }
