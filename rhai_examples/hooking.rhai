@@ -1,6 +1,7 @@
 fn init(script_id, script_store, global_store) {
-	script_store.set("counter", 0);
-	script_store.set("hooks_enabled", true);
+	// Three ways to do setters, interchangeable
+	script_store.counter = 0;
+	script_store["hooks_enabled"] = true;
 	script_store.set("pid", 69420);
 
 	let rax_accessor = Parameter::create(
@@ -37,13 +38,16 @@ fn init(script_id, script_store, global_store) {
 			},
 			script_id,
 			|script_id, script_store, global_store, parameters, call_ctrl| {
-				if !script_store.get("hooks_enabled") {
+				if !script_store.hooks_enabled {
 					return #{};
 					// return []; also works
 				}
 
-				let count = script_store.get("counter") + 1;
-				script_store.set("counter", count);
+				let count = script_store.counter + 1;
+				script_store.counter = count;
+				
+				// let count = script_store.get("counter");
+				// script_store.set("counter", count); also works
 
 				// Prefix functions can prevent the original from being ran
 				// call_ctrl.cancel();
@@ -70,12 +74,12 @@ fn init(script_id, script_store, global_store) {
 			},
 			script_id,
 			|script_id, script_store, global_store, parameters| {
-				if !script_store.get("hooks_enabled") {
+				if !script_store.hooks_enabled {
 					return [];
 					// return #{}; also works
 				}
 
-				let pid = script_store.get("pid");
+				let pid = script_store.pid;
 
 				parameters.ret.val = ParameterValue::U64(pid);
 
@@ -86,13 +90,13 @@ fn init(script_id, script_store, global_store) {
 }
 
 fn rpc_toggle_hooks(script_id, script_store, global_store) {
-	script_store.set("hooks_enabled", !script_store.get("hooks_enabled"));
+	script_store.hooks_enabled = !script_store.hooks_enabled;
 }
 
 fn rpc_set_faux_pid(script_id, script_store, global_store, pid) {
-	let old_pid = script_store.get("pid");
+	let old_pid = script_store.pid;
 
-	script_store.set("pid", pid);
+	script_store.pid = pid;
 
 	"Old PID: " + old_pid
 }

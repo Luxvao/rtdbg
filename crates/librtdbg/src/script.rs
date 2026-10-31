@@ -37,10 +37,24 @@ pub struct ScriptContext {
 impl Store {
     fn build_extra(builder: &mut TypeBuilder<Self>) {
         builder
+            .with_indexer_get(Self::string_indexer_get)
+            .with_indexer_set(Self::string_indexer_set)
             .with_fn("get", |s: &mut Store, k: String| Store::get(s, k))
             .with_fn("set", |s: &mut Store, k: String, v: Dynamic| {
                 Store::set(s, k, v)
             });
+    }
+
+    fn string_indexer_get(&mut self, index: String) -> Result<Dynamic, Box<EvalAltResult>> {
+        self.get(index)
+    }
+
+    fn string_indexer_set(
+        &mut self,
+        index: String,
+        value: Dynamic,
+    ) -> Result<(), Box<EvalAltResult>> {
+        self.set(index, value)
     }
 
     pub fn new() -> Store {
@@ -70,12 +84,7 @@ impl Store {
     pub fn set(&self, key: String, value: Dynamic) -> Result<(), Box<EvalAltResult>> {
         self.inner
             .lock()
-            .map_err(|e| {
-                Box::new(EvalAltResult::ErrorRuntime(
-                    e.to_string().into(),
-                    Position::NONE,
-                ))
-            })?
+            .map_err(|e| e.to_string())?
             .insert(key, value);
 
         Ok(())
