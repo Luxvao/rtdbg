@@ -111,6 +111,7 @@ impl MultiLineTextInput {
             // Normal mode, movement
             a if let Mode::Normal = self.mode => match a {
                 KeyCode::Esc => return true,
+                KeyCode::Tab => return true,
 
                 KeyCode::Char('i') if !self.ro => self.mode = Mode::Insert,
 
@@ -218,6 +219,14 @@ impl MultiLineTextInput {
                 self.cursor_x = 0;
 
                 self.buffer.insert(self.cursor_y, removed);
+            }
+            KeyCode::Tab => {
+                self.normalise_x();
+
+                for _ in 0..4 {
+                    self.buffer[self.cursor_y].insert(self.cursor_x, ' ');
+                    self.cursor_x = self.cursor_x.saturating_add(1);
+                }
             }
             KeyCode::Char(a) => {
                 self.normalise_x();

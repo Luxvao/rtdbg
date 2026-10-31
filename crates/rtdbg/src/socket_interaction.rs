@@ -52,7 +52,7 @@ pub fn unload_script(pid: i32, script_id: &ScriptId) -> Result<()> {
 }
 
 pub fn script_functions(pid: i32, script_id: &ScriptId) -> Result<()> {
-    let request = Request::ScriptFunctions {
+    let request = Request::ScriptRpcs {
         script_id: *script_id,
     };
 
@@ -61,7 +61,7 @@ pub fn script_functions(pid: i32, script_id: &ScriptId) -> Result<()> {
     let response = send_request(&mut socket, &request)?;
 
     match response {
-        Response::ScriptFunctions { functions } => {
+        Response::ScriptRpcs { rpcs: functions } => {
             for (function, parameters) in functions {
                 println!("⚬ `{function}`\n   ⮡ {parameters:?}");
             }
@@ -86,7 +86,7 @@ pub fn run_function(
     let request = Request::RunFunction {
         script_id: *script_id,
         function,
-        parameter,
+        parameters: parameter,
     };
 
     let mut socket = NativeRuntimeProvider::connect_socket(pid as u32)?;

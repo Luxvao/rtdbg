@@ -135,7 +135,7 @@ pub fn status() -> Result<Vec<(ScriptId, String)>, Error> {
         .collect())
 }
 
-pub fn get_script_functions(script_id: &ScriptId) -> Result<Vec<(String, Vec<String>)>, Error> {
+pub fn get_script_rpcs(script_id: &ScriptId) -> Result<Vec<(String, Vec<String>)>, Error> {
     Ok(SCRIPT_STORAGE
         .lock()?
         .get(script_id)
@@ -143,10 +143,39 @@ pub fn get_script_functions(script_id: &ScriptId) -> Result<Vec<(String, Vec<Str
         .script
         .ast
         .iter_functions()
+        // We skip anything that does not start with rpc_ or is private
+        .filter(|f| f.name.starts_with("rpc_") && f.access.is_public())
         .map(|f| {
             (
                 f.name.to_string(),
-                f.params.iter().map(|s| s.to_string()).collect(),
+                // We skip 3 to skip the general always provided ones (script_id, script_store, global_store)
+                f.params.iter().skip(3).map(|s| s.to_string()).collect(),
+            )
+        })
+        .collect())
+}
+
+pub fn get_all_rpcs() -> Result<Vec<(ScriptId, Vec<(String, Vec<String>)>)>, Error> {
+    let script_storage_lock = SCRIPT_STORAGE.lock()?;
+
+    Ok(script_storage_lock
+        .iter()
+        .map(|(k, v)| {
+            (
+                *k,
+                v.script
+                    .ast
+                    .iter_functions()
+                    // We skip anything that does not start with rpc_ or is private
+                    .filter(|f| f.name.starts_with("rpc_") && f.access.is_public())
+                    .map(|f| {
+                        (
+                            f.name.to_string(),
+                            // Same reason as above
+                            f.params.iter().skip(3).map(|s| s.to_string()).collect(),
+                        )
+                    })
+                    .collect(),
             )
         })
         .collect())

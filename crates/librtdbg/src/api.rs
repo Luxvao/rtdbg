@@ -14,12 +14,13 @@ pub enum Request {
     RunFunction {
         script_id: ScriptId,
         function: String,
-        parameter: Option<Value>,
+        parameters: Option<Value>,
     },
     Status,
-    ScriptFunctions {
+    ScriptRpcs {
         script_id: ScriptId,
     },
+    AllRpcs,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,8 +35,11 @@ pub enum Response {
     Status {
         loaded_scripts: Vec<(ScriptId, String)>,
     },
-    ScriptFunctions {
-        functions: Vec<(String, Vec<String>)>,
+    ScriptRpcs {
+        rpcs: Vec<(String, Vec<String>)>,
+    },
+    AllRpcs {
+        rpcs: Vec<(ScriptId, Vec<(String, Vec<String>)>)>,
     },
     Error(String),
 }

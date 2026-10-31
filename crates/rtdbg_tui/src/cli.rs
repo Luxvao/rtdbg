@@ -17,6 +17,8 @@ pub fn init() -> Result<()> {
 
     let mut app = App::default();
 
+    app.output.read_only(true);
+
     if let Some(scripts_path) = cli.scripts {
         load_scripts(&mut app, &scripts_path)?;
     }

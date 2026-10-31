@@ -37,7 +37,8 @@ fn init(script_id, script_store, global_store) {
 			script_id,
 			|script_id, script_store, global_store, parameters, call_ctrl| {
 				if !script_store.get("hooks_enabled") {
-					return [];
+					return #{};
+					// return []; also works
 				}
 
 				let count = script_store.get("counter") + 1;
@@ -69,7 +70,8 @@ fn init(script_id, script_store, global_store) {
 			script_id,
 			|script_id, script_store, global_store, parameters| {
 				if !script_store.get("hooks_enabled") {
-					return [];
+					return #{};
+					// return []; also works
 				}
 
 				parameters.ret.val = ParameterValue::U64(69420);
@@ -80,6 +82,6 @@ fn init(script_id, script_store, global_store) {
 	}
 }
 
-fn toggle_hooks(script_id, script_store, global_store) {
+fn rpc_toggle_hooks(script_id, script_store, global_store) {
 	script_store.set("hooks_enabled", !script_store.get("hooks_enabled"));
 }

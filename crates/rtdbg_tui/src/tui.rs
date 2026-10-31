@@ -7,7 +7,6 @@ use std::{
     time::Duration,
 };
 
-use color_eyre::eyre::Result;
 use crossterm::event::{self, Event, KeyCode};
 use librtdbg::script::ScriptId;
 use ratatui::{
@@ -22,14 +21,8 @@ use crate::{
     components::{MultiLineTextInput, TextInput, TextInputStatus, render_error, update_error},
     inject::launch,
     script::load_from_disk,
-    socket::{load_script, remote_scripts, unload_script},
+    socket::{get_rpcs, load_script, remote_scripts, run_rpc, unload_script},
 };
-
-pub fn init() -> Result<()> {
-    ratatui::run(|t| App::app(&mut App::default(), t))?;
-
-    Ok(())
-}
 
 #[derive(Debug, Default)]
 enum InjectionStatus {
@@ -162,6 +155,45 @@ impl ScriptsManager {
     }
 }
 
+#[derive(Debug, Clone)]
+enum RpcEntry {
+    ScriptId {
+        expanded: bool,
+        script_id: ScriptId,
+        rpcs: Vec<RpcEntry>,
+    },
+    Rpc {
+        name: String,
+        params: Vec<String>,
+        associated_script: ScriptId,
+    },
+}
+
+impl Display for RpcEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RpcEntry::ScriptId {
+                expanded: _,
+                script_id,
+                rpcs: _,
+            } => write!(f, "{:?}", script_id),
+            RpcEntry::Rpc {
+                name,
+                params,
+                associated_script: _,
+            } => write!(f, "  ⤷ {}({})", name, params.join(", ")),
+        }
+    }
+}
+
+#[derive(Default, Debug)]
+enum RpcState {
+    #[default]
+    RpcList,
+    InputPanel,
+    OutputPanel,
+}
+
 #[derive(Default, Debug)]
 pub struct App {
     exit: bool,
@@ -178,6 +210,14 @@ pub struct App {
 
     // Scripts
     pub scripts_mgr: ScriptsManager,
+
+    // RPC
+    rpc_state: RpcState,
+    rpc_list: Vec<RpcEntry>,
+    rpc_list_state: ListState,
+
+    input: MultiLineTextInput,
+    pub output: MultiLineTextInput,
 }
 
 impl App {
@@ -208,6 +248,7 @@ impl App {
         match self.tab {
             CurrentTab::Overview => self.construct_overview(frame, content),
             CurrentTab::Scripts => self.construct_script(frame, content),
+            CurrentTab::Rpc => self.construct_rpc(frame, content),
             _ => (),
         }
 
@@ -294,6 +335,24 @@ impl App {
                     }
                 }
 
+                // RPC Input panel
+                a if let CurrentTab::Rpc = self.tab
+                    && let RpcState::InputPanel = self.rpc_state =>
+                {
+                    if self.input.update(a) {
+                        self.rpc_state = RpcState::OutputPanel;
+                    }
+                }
+
+                // RPC Output panel
+                a if let CurrentTab::Rpc = self.tab
+                    && let RpcState::OutputPanel = self.rpc_state =>
+                {
+                    if self.output.update(a) {
+                        self.rpc_state = RpcState::RpcList;
+                    }
+                }
+
                 // Exit
                 KeyCode::Char('q') => self.exit = true,
 
@@ -314,7 +373,39 @@ impl App {
 
                     self.tab = CurrentTab::Scripts;
                 }
-                KeyCode::Char('3') => self.tab = CurrentTab::Rpc,
+                KeyCode::Char('3') => {
+                    self.tab = {
+                        if let Some(ref mut socket) = self.socket {
+                            match get_rpcs(socket) {
+                                Ok(rpcs) => {
+                                    self.rpc_list = rpcs
+                                        .into_iter()
+                                        .map(|(s, rpcs)| RpcEntry::ScriptId {
+                                            expanded: false,
+                                            script_id: s,
+                                            rpcs: rpcs
+                                                .into_iter()
+                                                .map(|v| RpcEntry::Rpc {
+                                                    name: v.0,
+                                                    params: v.1,
+                                                    associated_script: s,
+                                                })
+                                                .collect(),
+                                        })
+                                        .collect();
+                                }
+                                Err(e) => {
+                                    self.state = State::DisplayError(format!(
+                                        "Unable to fetch RPCs, error: {}",
+                                        e
+                                    ))
+                                }
+                            }
+                        }
+
+                        CurrentTab::Rpc
+                    }
+                }
                 KeyCode::Char('4') => self.tab = CurrentTab::Hooks,
 
                 // Overview
@@ -322,6 +413,9 @@ impl App {
 
                 // Scripts
                 a if let CurrentTab::Scripts = self.tab => self.handle_events_scripts(a),
+
+                // Rpc
+                a if let CurrentTab::Rpc = self.tab => self.handle_events_rpc(a),
 
                 _ => (),
             },
@@ -583,7 +677,7 @@ impl App {
                             ));
                         }
 
-                        self.clamp_selection();
+                        self.clamp_script_selection();
 
                         let new_text = match self.scripts_mgr.get_state().selected() {
                             Some(v) => self.scripts_mgr.get_src_at(v).unwrap_or_default(),
@@ -606,9 +700,9 @@ impl App {
                 KeyCode::Char('i') => {
                     if let Some(index) = self.scripts_mgr.local_scripts_state.selected()
                         && let Some(ref socket) = self.socket
-                        && let Some((_, source)) = self.scripts_mgr.local_scripts.try_remove(index)
+                        && let Some((_, source)) = self.scripts_mgr.local_scripts.get(index)
                     {
-                        if let Err(e) = load_script(socket, source) {
+                        if let Err(e) = load_script(socket, source.clone()) {
                             self.state =
                                 State::DisplayError(format!("Unable to load script, error: {}", e));
                         }
@@ -622,15 +716,6 @@ impl App {
                                 ))
                             }
                         }
-
-                        self.clamp_selection();
-
-                        let new_text = match self.scripts_mgr.get_state().selected() {
-                            Some(v) => self.scripts_mgr.get_src_at(v).unwrap_or_default(),
-                            None => String::default(),
-                        };
-
-                        self.scripts_mgr.preview.set_text(new_text);
                     }
                 }
                 _ => (),
@@ -640,7 +725,175 @@ impl App {
         }
     }
 
-    fn clamp_selection(&mut self) {
+    fn construct_rpc(&mut self, frame: &mut Frame, area: Rect) {
+        let [content, binds_area] =
+            Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]).areas(area);
+
+        // Content
+        let [left_content, right_content] =
+            Layout::horizontal([Constraint::Fill(1), Constraint::Fill(3)]).areas(content);
+
+        // RPC list
+        let rpc_list_title = if let RpcState::RpcList = self.rpc_state {
+            "* RPCs"
+        } else {
+            "RPCs"
+        };
+
+        let rpc_list_strings = self.rpc_list.iter().map(|i| i.to_string());
+
+        let highlight_style = Style::default()
+            .fg(ratatui::style::Color::Black)
+            .bg(ratatui::style::Color::White)
+            .add_modifier(Modifier::BOLD);
+
+        let rpc_list = List::from_iter(rpc_list_strings)
+            .block(Block::bordered().title(rpc_list_title))
+            .highlight_style(highlight_style);
+
+        frame.render_stateful_widget(rpc_list, left_content, &mut self.rpc_list_state);
+
+        // Input and output
+        let [input_panel_area, output_panel_area] =
+            Layout::vertical([Constraint::Fill(1), Constraint::Fill(1)]).areas(right_content);
+
+        let input_title = if let RpcState::InputPanel = self.rpc_state {
+            "* Input"
+        } else {
+            "Input"
+        };
+
+        let output_title = if let RpcState::OutputPanel = self.rpc_state {
+            "* Output"
+        } else {
+            "Output"
+        };
+
+        let input_block = Block::bordered().title(input_title);
+
+        let inner_input_block = input_block.inner(input_panel_area);
+
+        frame.render_widget(input_block, input_panel_area);
+
+        self.input.render(frame, inner_input_block);
+
+        let output_block = Block::bordered().title(output_title);
+
+        let inner_output_block = output_block.inner(output_panel_area);
+
+        frame.render_widget(output_block, output_panel_area);
+
+        self.output.render(frame, inner_output_block);
+
+        // Binds
+        let binds = if let RpcState::RpcList = self.rpc_state {
+            " [tab] switch pane │ [enter] expand │ [c]all"
+        } else {
+            " EDITOR"
+        };
+
+        let binds_paragraph = Paragraph::new(binds).block(Block::bordered());
+
+        frame.render_widget(binds_paragraph, binds_area);
+    }
+
+    fn handle_events_rpc(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Tab => {
+                self.rpc_state = match self.rpc_state {
+                    RpcState::RpcList => RpcState::InputPanel,
+                    RpcState::InputPanel => RpcState::OutputPanel,
+                    RpcState::OutputPanel => RpcState::RpcList,
+                }
+            }
+
+            KeyCode::Char('j') => self.rpc_list_state.select_next(),
+
+            KeyCode::Char('k') => self.rpc_list_state.select_previous(),
+
+            KeyCode::Char('c') => {
+                if let Some(ref socket) = self.socket
+                    && let Some(index) = self.rpc_list_state.selected()
+                {
+                    if let RpcEntry::Rpc {
+                        name,
+                        params: _,
+                        associated_script,
+                    } = &self.rpc_list[index]
+                    {
+                        match run_rpc(
+                            socket,
+                            associated_script,
+                            name.clone(),
+                            self.input.get_text().trim(),
+                        ) {
+                            Ok(resp) => {
+                                self.output.set_text(resp);
+                            }
+                            Err(e) => {
+                                self.state = State::DisplayError(format!(
+                                    "Unable to dispatch RPC, error: {}",
+                                    e
+                                ))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Handle expansion
+            KeyCode::Enter => {
+                self.clamp_rpc_selection();
+
+                if let Some(index) = self.rpc_list_state.selected() {
+                    let (was_expanded, script_id) = match &mut self.rpc_list[index] {
+                        RpcEntry::ScriptId {
+                            expanded,
+                            script_id,
+                            rpcs: _,
+                        } => {
+                            *expanded = !*expanded;
+
+                            (!*expanded, *script_id)
+                        }
+                        _ => return,
+                    };
+
+                    if was_expanded {
+                        self.rpc_list.retain(|e| {
+                            if let RpcEntry::Rpc {
+                                name: _,
+                                params: _,
+                                associated_script,
+                            } = e
+                            {
+                                &script_id != associated_script
+                            } else {
+                                true
+                            }
+                        });
+
+                        return;
+                    }
+
+                    if let RpcEntry::ScriptId {
+                        expanded: _,
+                        script_id: _,
+                        rpcs,
+                    } = self.rpc_list[index].clone()
+                    {
+                        for rpc in rpcs {
+                            self.rpc_list.insert(index + 1, rpc);
+                        }
+                    }
+                }
+            }
+
+            _ => (),
+        }
+    }
+
+    fn clamp_script_selection(&mut self) {
         let len = self.scripts_mgr.get_sel_len();
         let state = self.scripts_mgr.get_state();
 
@@ -649,5 +902,16 @@ impl App {
             Some(i) if i >= len => state.select(Some(len - 1)),
             _ => (),
         }
+    }
+
+    fn clamp_rpc_selection(&mut self) {
+        let len = self.rpc_list.len();
+        let state = &mut self.rpc_list_state;
+
+        match state.selected() {
+            Some(_) if len == 0 => state.select(None),
+            Some(i) if i >= len => state.select(Some(len - 1)),
+            _ => (),
+        };
     }
 }

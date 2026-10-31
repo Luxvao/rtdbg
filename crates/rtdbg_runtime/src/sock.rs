@@ -5,10 +5,12 @@ use librtdbg::{
     os::{NativeRuntimeProvider, RuntimeProvider},
 };
 use log::{error, info};
-use rhai::Dynamic;
+use rhai::{Array, Dynamic};
 use serde::Deserialize;
 
-use crate::runtime::{get_script_functions, load_script, run_function, status, unload_script};
+use crate::runtime::{
+    get_all_rpcs, get_script_rpcs, load_script, run_function, status, unload_script,
+};
 
 pub fn io() {
     let pid = std::process::id();
@@ -54,15 +56,12 @@ fn handle_client(mut stream: UnixStream) {
             Request::RunFunction {
                 script_id,
                 function,
-                parameter: params,
+                parameters: params,
             } => {
                 if let Some(params) = params {
-                    run_function::<Dynamic, (Dynamic,)>(
-                        script_id,
-                        &function,
-                        (serde_json::from_value(params).unwrap_or_default(),),
-                    )
-                    .map_or_else(
+                    let params: Array = serde_json::from_value(params).unwrap_or_default();
+
+                    run_function::<Dynamic, Array>(script_id, &function, params).map_or_else(
                         |e| Response::Error(e.to_string()),
                         |o| Response::RunSuccess {
                             response: serde_json::to_value(o).unwrap_or_default(),
@@ -77,9 +76,13 @@ fn handle_client(mut stream: UnixStream) {
                     )
                 }
             }
-            Request::ScriptFunctions { script_id } => get_script_functions(&script_id).map_or_else(
+            Request::ScriptRpcs { script_id } => get_script_rpcs(&script_id).map_or_else(
                 |e| Response::Error(e.to_string()),
-                |o| Response::ScriptFunctions { functions: o },
+                |o| Response::ScriptRpcs { rpcs: o },
+            ),
+            Request::AllRpcs => get_all_rpcs().map_or_else(
+                |e| Response::Error(e.to_string()),
+                |o| Response::AllRpcs { rpcs: o },
             ),
             Request::Status => status().map_or_else(
                 |e| Response::Error(e.to_string()),

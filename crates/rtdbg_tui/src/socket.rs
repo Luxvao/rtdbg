@@ -42,3 +42,42 @@ pub fn unload_script(socket: &UnixStream, id: ScriptId) -> Result<(), Error> {
         Err(Error::UnexpectedResponse(resp))
     }
 }
+
+pub fn get_rpcs(socket: &UnixStream) -> Result<Vec<(ScriptId, Vec<(String, Vec<String>)>)>, Error> {
+    let request = Request::AllRpcs;
+
+    let resp = send_request(socket, &request)?;
+
+    if let Response::AllRpcs { rpcs } = resp {
+        Ok(rpcs)
+    } else {
+        Err(Error::UnexpectedResponse(resp))
+    }
+}
+
+pub fn run_rpc(
+    socket: &UnixStream,
+    script_id: &ScriptId,
+    rpc: String,
+    input_text: &str,
+) -> Result<String, Error> {
+    let parameters = if input_text.is_empty() {
+        None
+    } else {
+        Some(serde_json::from_str(input_text)?)
+    };
+
+    let request = Request::RunFunction {
+        script_id: *script_id,
+        function: rpc,
+        parameters,
+    };
+
+    let resp = send_request(socket, &request)?;
+
+    if let Response::RunSuccess { response } = resp {
+        Ok(response.to_string())
+    } else {
+        Err(Error::UnexpectedResponse(resp))
+    }
+}
