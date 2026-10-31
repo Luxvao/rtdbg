@@ -503,6 +503,7 @@ impl App {
             KeyCode::Char('k') if let Some(pid) = self.pid.take() => {
                 self.injection_method = InjectionStatus::NotInjected;
                 self.stdout = Arc::new(Mutex::new(VecDeque::new()));
+                self.socket = None;
 
                 let mut sys = System::new();
 

@@ -1,6 +1,7 @@
 fn init(script_id, script_store, global_store) {
 	script_store.set("counter", 0);
 	script_store.set("hooks_enabled", true);
+	script_store.set("pid", 69420);
 
 	let rax_accessor = Parameter::create(
 		ParameterLocation::Reg(Register::Rax),
@@ -70,11 +71,13 @@ fn init(script_id, script_store, global_store) {
 			script_id,
 			|script_id, script_store, global_store, parameters| {
 				if !script_store.get("hooks_enabled") {
-					return #{};
-					// return []; also works
+					return [];
+					// return #{}; also works
 				}
 
-				parameters.ret.val = ParameterValue::U64(69420);
+				let pid = script_store.get("pid");
+
+				parameters.ret.val = ParameterValue::U64(pid);
 
 				parameters
 			}
@@ -84,4 +87,12 @@ fn init(script_id, script_store, global_store) {
 
 fn rpc_toggle_hooks(script_id, script_store, global_store) {
 	script_store.set("hooks_enabled", !script_store.get("hooks_enabled"));
+}
+
+fn rpc_set_faux_pid(script_id, script_store, global_store, pid) {
+	let old_pid = script_store.get("pid");
+
+	script_store.set("pid", pid);
+
+	"Old PID: " + old_pid
 }

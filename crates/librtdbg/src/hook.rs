@@ -90,11 +90,8 @@ pub struct ImportCtx {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, CustomType)]
 pub struct ImportId(u64);
 
-pub type HookCallback = fn(
-    HookId,
-    Either<&mut Vec<Parameter>, &mut HashMap<String, Parameter>>,
-    Option<&mut CallControl>,
-);
+pub type HookCallback =
+    fn(HookId, &mut Either<Vec<Parameter>, HashMap<String, Parameter>>, Option<&mut CallControl>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, CustomType)]
 pub struct HookId {
@@ -348,7 +345,7 @@ extern "C" fn dispatcher(
             }
         }
 
-        (ctx.callback)(id, ctx.parameters.as_mut(), call_control.as_mut());
+        (ctx.callback)(id, &mut ctx.parameters, call_control.as_mut());
 
         match &ctx.parameters {
             Either::First(vec) => {
