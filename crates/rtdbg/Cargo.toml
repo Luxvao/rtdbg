@@ -6,6 +6,10 @@ edition = "2024"
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 color-eyre = { workspace = true }
+home = "0.5.12"
 librtdbg = { workspace = true, features = ["include_runtime"] }
+reedline = "0.52.1"
 serde.workspace = true
 serde_json.workspace = true
+termtree = "1.0.0"
+thiserror.workspace = true

@@ -14,7 +14,7 @@ pub enum Request {
     RunFunction {
         script_id: ScriptId,
         function: String,
-        parameters: Option<Value>,
+        arguments: Option<Value>,
     },
     Status,
     ScriptRpcs {

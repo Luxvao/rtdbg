@@ -56,7 +56,7 @@ fn handle_client(mut stream: UnixStream) {
             Request::RunFunction {
                 script_id,
                 function,
-                parameters: params,
+                arguments: params,
             } => {
                 if let Some(params) = params {
                     let params: Array = serde_json::from_value(params).unwrap_or_default();

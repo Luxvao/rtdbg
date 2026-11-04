@@ -70,7 +70,7 @@ pub fn run_rpc(
     let request = Request::RunFunction {
         script_id: *script_id,
         function: rpc,
-        parameters,
+        arguments: parameters,
     };
 
     let resp = send_request(socket, &request)?;

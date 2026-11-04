@@ -1,4 +1,5 @@
 use std::{
+    any::type_name,
     collections::HashMap,
     sync::{Arc, Mutex},
 };
@@ -42,7 +43,9 @@ impl Store {
             .with_fn("get", |s: &mut Store, k: String| Store::get(s, k))
             .with_fn("set", |s: &mut Store, k: String, v: Dynamic| {
                 Store::set(s, k, v)
-            });
+            })
+            .with_fn("fetch_add", Self::fetch_add)
+            .with_fn("add_fetch", Self::add_fetch);
     }
 
     fn string_indexer_get(&mut self, index: String) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -67,17 +70,9 @@ impl Store {
         Ok(self
             .inner
             .lock()
-            .map_err(|e| {
-                Box::new(EvalAltResult::ErrorRuntime(
-                    e.to_string().into(),
-                    Position::NONE,
-                ))
-            })?
+            .map_err(|e| e.to_string())?
             .get(&key)
-            .ok_or(Box::new(EvalAltResult::ErrorRuntime(
-                "Value not found".into(),
-                Position::NONE,
-            )))?
+            .ok_or("value not initialised")?
             .clone())
     }
 
@@ -88,6 +83,40 @@ impl Store {
             .insert(key, value);
 
         Ok(())
+    }
+
+    pub fn fetch_add(&self, key: String, value: i64) -> Result<i64, Box<EvalAltResult>> {
+        let mut lock = self.inner.lock().map_err(|e| e.to_string())?;
+
+        let entry = lock.get_mut(&key).ok_or("value not initialised")?;
+
+        let val = cast_wrapper::<i64>(entry)?;
+
+        *entry = Dynamic::from_int(val + value);
+
+        Ok(val)
+    }
+
+    pub fn add_fetch(&self, key: String, value: i64) -> Result<i64, Box<EvalAltResult>> {
+        let mut lock = self.inner.lock().map_err(|e| e.to_string())?;
+
+        let entry = lock.get_mut(&key).ok_or("value not initialised")?;
+
+        let val = cast_wrapper::<i64>(entry)? + value;
+
+        *entry = Dynamic::from_int(val);
+
+        Ok(val)
+    }
+}
+
+fn cast_wrapper<T: 'static>(dynamic: &mut Dynamic) -> Result<T, Box<EvalAltResult>> {
+    match std::mem::take(dynamic).try_cast_result::<T>() {
+        Ok(val) => Ok(val),
+        Err(val) => {
+            *dynamic = val;
+            Err(format!("expected {}", type_name::<T>()).into())
+        }
     }
 }
 

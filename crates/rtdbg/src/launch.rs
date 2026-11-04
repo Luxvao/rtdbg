@@ -1,20 +1,28 @@
-use std::{path::PathBuf, process::Command};
+use std::{
+    path::Path,
+    process::{Command, Stdio},
+};
 
 use color_eyre::Result;
 use librtdbg::extract::extract_runtime;
 
-pub fn launch(program: PathBuf) -> Result<()> {
+use crate::repl::{ATTACHED_PID, Error};
+
+pub fn launch(program: &Path) -> Result<(), Error> {
     let runtime_path = extract_runtime()?;
 
-    let mut child = Command::new(program)
+    let child = Command::new(program)
+        .stdout(Stdio::null())
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
         .env("LD_PRELOAD", runtime_path)
         .spawn()?;
 
-    println!("PID: {}", child.id());
+    let pid = child.id();
 
-    let status = child.wait()?;
+    *ATTACHED_PID.write().expect("ATTACHED_PID poisoned") = Some(pid);
 
-    println!("{:?}", status);
+    println!("{}", pid);
 
     Ok(())
 }

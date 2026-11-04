@@ -15,6 +15,10 @@ impl RuntimeProvider for LinuxRuntimeProvider {
         Ok(Self::rtdbg_temp_dir()?.join("rtdbg_runtime.so"))
     }
 
+    fn rtdbg_path() -> Result<PathBuf, Error> {
+        Self::rtdbg_temp_dir()
+    }
+
     fn runtime_file_handle() -> Result<File, Error> {
         Self::init()?;
 
@@ -24,6 +28,10 @@ impl RuntimeProvider for LinuxRuntimeProvider {
             .truncate(true)
             .create(true)
             .open(Self::runtime_path()?)?)
+    }
+
+    fn socket_path(pid: u32) -> Result<PathBuf, Error> {
+        Self::socket_path(pid)
     }
 
     fn create_socket(pid: u32) -> Result<UnixListener, Error> {
