@@ -7,7 +7,10 @@ use libc::{
 use crate::{
     error::Error,
     os::{
-        linux::{process::LinuxProcess, vma::Permissions},
+        linux::{
+            process::LinuxProcess,
+            vma::{Permissions, Vma},
+        },
         memory::{LocationHint, MemoryPage, MemoryProvider, PageProtections},
     },
 };
@@ -41,7 +44,7 @@ impl MemoryProvider for LinuxMemoryProvider {
     fn allocate_page(hint: LocationHint, prot: PageProtections) -> Result<MemoryPage, Error> {
         let hint_address: *mut c_void = match hint {
             LocationHint::None => std::ptr::null_mut(),
-            LocationHint::Near { loc, max_offset } => todo!(),
+            LocationHint::Near { loc, max_offset } => find_near(loc, max_offset)?,
             LocationHint::Exact(addr) => addr as *mut c_void,
         };
 
@@ -134,4 +137,42 @@ fn vma_permissions_to_prot(permissions: Permissions) -> PageProtections {
     }
 
     PageProtections::None
+}
+
+fn find_near(loc: u64, max_offset: u64) -> Result<*mut c_void, Error> {
+    let process = LinuxProcess::this()?;
+
+    let relevant_vmas = process
+        .vmas
+        .iter()
+        .filter(|vma| vma.eaddy >= (loc - max_offset) && vma.saddy <= (loc + max_offset))
+        .collect::<Vec<&Vma>>();
+
+    // If we check the first and last relevant mapping and they have free space before or after them, then we've found our page
+    if let Some(first_map) = relevant_vmas.first() {
+        if first_map.saddy > (loc - max_offset) {
+            return Ok((loc - max_offset) as *mut c_void);
+        }
+    }
+
+    if let Some(last_map) = relevant_vmas.last() {
+        if last_map.eaddy < (loc + max_offset) {
+            return Ok((loc + max_offset) as *mut c_void);
+        }
+    }
+
+    // Otherwise we pair them up and calculate differences
+    let pairs = relevant_vmas
+        .iter()
+        .zip(relevant_vmas.iter().skip(1))
+        .filter_map(|(a, b)| {
+            if b.saddy - a.eaddy > 0 {
+                Some((a.saddy, b.eaddy))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<(u64, u64)>>();
+
+    todo!()
 }
