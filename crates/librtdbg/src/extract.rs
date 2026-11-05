@@ -2,7 +2,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use crate::error::Error;
-use crate::os::{NativeRuntimeProvider, RuntimeProvider};
+use crate::os::{NativeRuntimeProvider, runtime::RuntimeProvider};
 
 pub const RTDBG_RUNTIME: &[u8] = include_bytes!("../../../target/release/librtdbg_runtime.so");
 

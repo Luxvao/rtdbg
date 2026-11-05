@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{error::Error, os::RuntimeProvider};
+use crate::{error::Error, os::runtime::RuntimeProvider};
 
 pub struct LinuxRuntimeProvider {}
 

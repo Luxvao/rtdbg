@@ -18,3 +18,4 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 clear-cache = { workspace = true }
+uds_windows = "1.2.1"

@@ -9,7 +9,7 @@ use std::{
 use librtdbg::{
     error::Error,
     extract::extract_runtime,
-    os::{NativeRuntimeProvider, RuntimeProvider},
+    os::{NativeRuntimeProvider, runtime::RuntimeProvider},
 };
 
 pub fn launch(

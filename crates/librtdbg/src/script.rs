@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use rhai::{AST, CustomType, Dynamic, EvalAltResult, FnPtr, Position, TypeBuilder};
+use rhai::{AST, CustomType, Dynamic, EvalAltResult, FnPtr, TypeBuilder};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, CustomType, Hash, PartialEq, Eq)]

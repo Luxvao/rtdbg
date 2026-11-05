@@ -1,9 +1,7 @@
-use std::path::PathBuf;
-
 use clap::Parser;
 use color_eyre::eyre::Result;
 
-use crate::{launch::launch, repl};
+use crate::repl;
 
 #[derive(clap::Parser, Debug)]
 #[command(version, about = "CLI for Rtdbg", long_about = None)]

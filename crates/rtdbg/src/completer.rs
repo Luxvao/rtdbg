@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use librtdbg::os::{NativeRuntimeProvider, RuntimeProvider};
+use librtdbg::os::{NativeRuntimeProvider, runtime::RuntimeProvider};
 use reedline::{Completer, CompletionResult, Span, Suggestion};
 
 use crate::{
@@ -231,7 +231,7 @@ fn complete_relevant_pid(prefix: &str, span: Span) -> Vec<Suggestion> {
         .flatten()
         .filter(|e| {
             if let Ok(val) = e.parse::<u32>() {
-                NativeRuntimeProvider::prune_inactive_socket(val)
+                !NativeRuntimeProvider::prune_inactive_socket(val)
             } else {
                 false
             }

@@ -1,10 +1,8 @@
-use std::{os::unix::net::UnixStream, path::Path};
-
 use librtdbg::{
     api::{Request, Response},
     comms::send_request,
     error::Error,
-    os::{NativeRuntimeProvider, RuntimeProvider},
+    os::{NativeRuntimeProvider, ipc::UnixStream, runtime::RuntimeProvider},
     script::ScriptId,
 };
 use serde_json::Value;

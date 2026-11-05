@@ -1,13 +1,13 @@
 use std::ffi::{CStr, c_void};
 
 #[derive(Debug, Clone)]
-pub struct Memory {
+pub struct MemoryBlock {
     base: *mut c_void,
 }
 
-impl Memory {
-    pub fn at(base: u64) -> Memory {
-        Memory {
+impl MemoryBlock {
+    pub fn at(base: u64) -> MemoryBlock {
+        MemoryBlock {
             base: base as *mut c_void,
         }
     }

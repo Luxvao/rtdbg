@@ -7,7 +7,7 @@ use rhai::{CustomType, Dynamic, EvalAltResult, TypeBuilder, export_module};
 
 use crate::{
     error::Error,
-    memory::Memory,
+    memory::MemoryBlock,
     register::{Register, RegisterSnapshot},
     utils::{FromU128, ToU128},
 };
@@ -341,7 +341,7 @@ impl Parameter {
     ) -> T {
         match location {
             ParameterLocation::Relative(o) => {
-                let memory = Memory::at(base);
+                let memory = MemoryBlock::at(base);
 
                 memory.load(*o)
             }
@@ -361,7 +361,7 @@ impl Parameter {
 
         match location {
             ParameterLocation::Relative(o) => {
-                let memory = Memory::at(base);
+                let memory = MemoryBlock::at(base);
 
                 memory.store(*o, value);
             }
@@ -374,7 +374,7 @@ impl Parameter {
     pub fn acquire_cstr(location: &ParameterLocation, base: u64) -> Result<&'static CStr, Error> {
         match location {
             ParameterLocation::Relative(o) => {
-                let memory = Memory::at(base);
+                let memory = MemoryBlock::at(base);
 
                 Ok(memory.load_cstr(*o))
             }
@@ -389,7 +389,7 @@ impl Parameter {
 
         match location {
             ParameterLocation::Relative(o) => {
-                let memory = Memory::at(base);
+                let memory = MemoryBlock::at(base);
 
                 memory.store_cstr(*o, value);
             }

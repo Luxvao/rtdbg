@@ -1,8 +1,6 @@
-use std::os::unix::net::UnixStream;
-
 use librtdbg::{
     api::{Request, Response},
-    os::{NativeRuntimeProvider, RuntimeProvider},
+    os::{NativeRuntimeProvider, ipc::UnixStream, runtime::RuntimeProvider},
 };
 use log::{error, info};
 use rhai::{Array, Dynamic};

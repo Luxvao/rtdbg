@@ -302,12 +302,12 @@ fn parse_rpc(pid: Option<u32>, cmd: &str) -> Result<Command, Error> {
 #[derive(Error, Debug)]
 pub enum Error {
     // ArgKind errors
-    #[error("Unexpected character '{0}' at {1}")]
-    UnexpectedCharacter(char, usize),
+    // #[error("Unexpected character '{0}' at {1}")]
+    // UnexpectedCharacter(char, usize),
     #[error("Unexpected end of array at {0}")]
     MismatchedParens(usize),
-    #[error("'{0}' is not a valid ArgType")]
-    InvalidArgType(String),
+    // #[error("'{0}' is not a valid ArgType")]
+    // InvalidArgType(String),
     #[error("Input is invalid")]
     InvalidInput,
     #[error("Refused to serialise invalid ArgKind")]

@@ -8,7 +8,7 @@ impl Hinter for RtdbgHinter {
     fn handle(
         &mut self,
         mut line: &str,
-        pos: usize,
+        _: usize,
         _: &dyn reedline::History,
         _: bool,
         _: &str,

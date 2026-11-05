@@ -280,7 +280,7 @@ impl App {
                 a if let State::PidTextInput(ref mut ti) = self.state => match ti.update(a) {
                     TextInputStatus::Cancelled => self.state = State::Normal,
                     TextInputStatus::Continue => (),
-                    TextInputStatus::Done(i) => {
+                    TextInputStatus::Done(_i) => {
                         self.state = State::Normal;
                     }
                 },

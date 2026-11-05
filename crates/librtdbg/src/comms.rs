@@ -1,10 +1,9 @@
-use std::os::unix::net::UnixStream;
-
 use serde::Deserialize;
 
 use crate::{
     api::{Request, Response},
     error::Error,
+    os::ipc::UnixStream,
 };
 
 pub fn send_request(socket: &UnixStream, request: &Request) -> Result<Response, Error> {

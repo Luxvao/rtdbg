@@ -1,9 +1,7 @@
 use color_eyre::eyre::Result;
 use iced::{
     Element, Length, Pixels,
-    widget::{
-        Button, button, column as col, container, row, rule::horizontal, svg, text_input::Icon,
-    },
+    widget::{Button, button, column as col, container, row, rule::horizontal},
 };
 
 use crate::style::{panel_container_style, side_panel_button_style, top_level_container_style};
