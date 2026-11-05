@@ -1,3 +1,4 @@
+pub mod memory_provider;
 pub mod process;
 pub mod runtime_provider;
 pub mod vma;

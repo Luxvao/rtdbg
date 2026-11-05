@@ -9,9 +9,6 @@ use std::{
 };
 
 use imp_core::ImportSlot;
-use libc::{
-    _SC_PAGESIZE, MAP_ANONYMOUS, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE, mmap, sysconf,
-};
 use log::warn;
 use rhai::{CustomType, EvalAltResult, TypeBuilder};
 
@@ -22,6 +19,10 @@ use crate::{
     create_enum_module,
     either::Either,
     error::Error,
+    os::{
+        NativeMemoryProvider,
+        memory::{LocationHint, MemoryPage, MemoryProvider, PageProtections},
+    },
     parameter::Parameter,
 };
 
@@ -77,7 +78,7 @@ fn free_trampoline_and_err(trampoline_ptr: *mut u8, err: Error) -> Error {
 pub struct TrampolineAllocator {
     aligned_size: u64,
     page_size: u64,
-    pages: VecDeque<(Bits, u64)>,
+    pages: VecDeque<(Bits, MemoryPage)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -145,7 +146,7 @@ pub struct HookOrder(i64);
 impl TrampolineAllocator {
     pub fn new(trampoline_size: u64) -> TrampolineAllocator {
         // align on 8 byte boundary
-        let page_size = unsafe { sysconf(_SC_PAGESIZE) };
+        let page_size = NativeMemoryProvider::page_size();
 
         TrampolineAllocator {
             aligned_size: trampoline_size.div_ceil(8) * 8,
@@ -154,10 +155,10 @@ impl TrampolineAllocator {
         }
     }
 
-    pub fn fetch_or_alloc(&mut self) -> Result<*mut u8, Error> {
+    pub fn fetch_or_alloc(&mut self) -> Result<(&mut MemoryPage, usize), Error> {
         let slots = self.page_size / self.aligned_size;
 
-        for (bitmap, ptr) in self.pages.iter_mut() {
+        for (bitmap, page) in self.pages.iter_mut() {
             if bitmap.is_all_set() {
                 continue;
             }
@@ -168,9 +169,7 @@ impl TrampolineAllocator {
                         .set(i as usize, 1)
                         .map_err(|_| Error::UnableToAllocateHook)?;
 
-                    return Ok(unsafe {
-                        (*ptr as *mut u8).byte_add((i * self.aligned_size) as usize)
-                    });
+                    return Ok((page, i as usize * self.aligned_size as usize));
                 }
             }
         }
@@ -183,35 +182,19 @@ impl TrampolineAllocator {
     pub fn alloc_page(&mut self) -> Result<(), Error> {
         let slots = self.page_size / self.aligned_size;
 
-        let address = unsafe {
-            mmap(
-                std::ptr::null_mut(),
-                self.page_size as usize,
-                PROT_READ | PROT_WRITE | PROT_EXEC,
-                MAP_PRIVATE | MAP_ANONYMOUS,
-                -1,
-                0,
-            )
-        };
+        let page = NativeMemoryProvider::allocate_page(LocationHint::None, PageProtections::RX)?;
 
-        if address as i64 == -1 {
-            return Err(Error::UnableToAllocatePage);
-        }
-
-        self.pages
-            .push_front((Bits::new(slots as usize), address as u64));
+        self.pages.push_front((Bits::new(slots as usize), page));
         Ok(())
     }
 
     pub fn free(&mut self, ptr: *mut u8) -> Result<(), Error> {
         let ptr = ptr as u64;
 
-        for (bitmap, ptr_s) in self.pages.iter_mut() {
-            let ptr_base = *ptr_s;
-
-            if ptr_base <= ptr && ptr < ptr_base + self.page_size {
+        for (bitmap, page) in self.pages.iter_mut() {
+            if page.get_ptr() as u64 <= ptr && ptr < page.get_ptr() as u64 + self.page_size {
                 // If we're here then this is the page that contains that particular pointer
-                let slot = (ptr - ptr_base) / self.aligned_size;
+                let slot = (ptr - page.get_ptr() as u64) / self.aligned_size;
 
                 bitmap
                     .set(slot as usize, 0)
@@ -489,9 +472,12 @@ pub fn patch_import(
         None => ImportId(ID_GEN.fetch_add(1, Ordering::Relaxed)),
     };
 
+    let mut import_slot_page = NativeMemoryProvider::get_page(import_slot.ptr)?;
+
     let slot = unsafe { AtomicUsize::from_ptr(import_slot.ptr as *mut usize) };
 
-    let original_address = slot.load(Ordering::Acquire);
+    let original_address =
+        import_slot_page.with_prot(PageProtections::RW, |_| slot.load(Ordering::Acquire))?;
 
     // Generating a native trampoline
     let trampoline = generate_trampoline(
@@ -500,30 +486,41 @@ pub fn patch_import(
         original_address as u64,
     );
 
-    let trampoline_ptr = TRAMPOLINE_ALLOCATOR.lock()?.fetch_or_alloc()?;
+    let mut trampoline_allocator_lock = TRAMPOLINE_ALLOCATOR.lock()?;
 
-    unsafe {
+    let (trampoline_page, offset) = trampoline_allocator_lock.fetch_or_alloc()?;
+
+    trampoline_page.with_prot(PageProtections::RW, |ptr| unsafe {
+        let trampoline_ptr = ptr.byte_add(offset);
+
         // Here we write the trampoline into the allocated space
         ptr::copy_nonoverlapping(trampoline.as_ptr(), trampoline_ptr, trampoline.len());
-        if !clear_cache::clear_cache(trampoline_ptr, trampoline_ptr.byte_add(trampoline.len())) {
-            // Critical error, couldn't clear cache
-            return Err(free_trampoline_and_err(
-                trampoline_ptr,
-                Error::IcacheFlushFailed,
-            ));
-        }
+    })?;
+
+    let trampoline_ptr = unsafe { trampoline_page.get_ptr().byte_add(offset) };
+
+    if unsafe {
+        !clear_cache::clear_cache(trampoline_ptr, trampoline_ptr.byte_add(trampoline.len()))
+    } {
+        // Critical error, couldn't clear cache
+        return Err(free_trampoline_and_err(
+            trampoline_ptr,
+            Error::IcacheFlushFailed,
+        ));
     }
 
     // Here we swap the pointer if it hasn't changed in the meantime
-    slot.compare_exchange(
-        original_address,
-        trampoline_ptr as usize,
-        Ordering::Release,
-        Ordering::Relaxed,
-    )
-    .map_err(|_| {
-        free_trampoline_and_err(trampoline_ptr, Error::SlotChanged(import_slot.clone()))
-    })?;
+    import_slot_page.with_prot(PageProtections::RW, |_| {
+        slot.compare_exchange(
+            original_address,
+            trampoline_ptr as usize,
+            Ordering::Release,
+            Ordering::Relaxed,
+        )
+        .map_err(|_| {
+            free_trampoline_and_err(trampoline_ptr, Error::SlotChanged(import_slot.clone()))
+        })
+    })??;
 
     patches_lock.insert(
         import_slot,

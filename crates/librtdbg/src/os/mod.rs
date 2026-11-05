@@ -7,6 +7,9 @@ pub mod runtime;
 pub type NativeRuntimeProvider = linux::runtime_provider::LinuxRuntimeProvider;
 
 #[cfg(target_os = "linux")]
+pub type NativeMemoryProvider = linux::memory_provider::LinuxMemoryProvider;
+
+#[cfg(target_os = "linux")]
 pub type NativeParser = imep::parser::ElfParser;
 
 #[cfg(target_os = "linux")]

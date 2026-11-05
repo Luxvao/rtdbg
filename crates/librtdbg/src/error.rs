@@ -49,6 +49,12 @@ pub enum Error {
     UnableToFreeHook,
     #[error("Unable to allocate page")]
     UnableToAllocatePage,
+    #[error("Unable to deallocate page")]
+    UnableToDeallocatePage,
+    #[error("Unable to set page protections")]
+    UnableToSetPageProtections,
+    #[error("Page is not mapped")]
+    PageNotMapped,
     #[error("Unable to patch {0:?} as it's already patched")]
     ImportAlreadyPatched(ImportSlot),
     #[error("Unable to unpatch {0:?} as it's not patched")]
