@@ -202,34 +202,74 @@ impl Parameter {
     ) -> Result<(), Error> {
         match &mut self.value {
             ParameterValue::U8(v) => {
-                *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
+                *v = Some(Self::acquire_value(
+                    &self.location,
+                    register_snapshot,
+                    base,
+                )?)
             }
             ParameterValue::U16(v) => {
-                *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
+                *v = Some(Self::acquire_value(
+                    &self.location,
+                    register_snapshot,
+                    base,
+                )?)
             }
             ParameterValue::U32(v) => {
-                *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
+                *v = Some(Self::acquire_value(
+                    &self.location,
+                    register_snapshot,
+                    base,
+                )?)
             }
             ParameterValue::U64(v) => {
-                *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
+                *v = Some(Self::acquire_value(
+                    &self.location,
+                    register_snapshot,
+                    base,
+                )?)
             }
             ParameterValue::I8(v) => {
-                *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
+                *v = Some(Self::acquire_value(
+                    &self.location,
+                    register_snapshot,
+                    base,
+                )?)
             }
             ParameterValue::I16(v) => {
-                *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
+                *v = Some(Self::acquire_value(
+                    &self.location,
+                    register_snapshot,
+                    base,
+                )?)
             }
             ParameterValue::I32(v) => {
-                *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
+                *v = Some(Self::acquire_value(
+                    &self.location,
+                    register_snapshot,
+                    base,
+                )?)
             }
             ParameterValue::I64(v) => {
-                *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
+                *v = Some(Self::acquire_value(
+                    &self.location,
+                    register_snapshot,
+                    base,
+                )?)
             }
             ParameterValue::F32(v) => {
-                *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
+                *v = Some(Self::acquire_value(
+                    &self.location,
+                    register_snapshot,
+                    base,
+                )?)
             }
             ParameterValue::F64(v) => {
-                *v = Some(Self::acquire_value(&self.location, register_snapshot, base))
+                *v = Some(Self::acquire_value(
+                    &self.location,
+                    register_snapshot,
+                    base,
+                )?)
             }
             ParameterValue::CStr(v) => {
                 *v = Some(
@@ -239,7 +279,7 @@ impl Parameter {
                 )
             }
             ParameterValue::Ptr(v, parameters) => {
-                let new_base = Self::acquire_value(&self.location, register_snapshot, base);
+                let new_base = Self::acquire_value(&self.location, register_snapshot, base)?;
 
                 if new_base == 0 {
                     self.value = ParameterValue::NullPtr;
@@ -253,7 +293,7 @@ impl Parameter {
                 }
             }
             ParameterValue::NamedPtr(v, parameters) => {
-                let new_base = Self::acquire_value(&self.location, register_snapshot, base);
+                let new_base = Self::acquire_value(&self.location, register_snapshot, base)?;
 
                 if new_base == 0 {
                     self.value = ParameterValue::NullPtr;
@@ -279,34 +319,34 @@ impl Parameter {
     ) -> Result<(), Error> {
         match &self.value {
             ParameterValue::U8(Some(v)) => {
-                Self::commit_value(*v, &self.location, register_snapshot, base);
+                Self::commit_value(*v, &self.location, register_snapshot, base)?;
             }
             ParameterValue::U16(Some(v)) => {
-                Self::commit_value(*v, &self.location, register_snapshot, base);
+                Self::commit_value(*v, &self.location, register_snapshot, base)?;
             }
             ParameterValue::U32(Some(v)) => {
-                Self::commit_value(*v, &self.location, register_snapshot, base);
+                Self::commit_value(*v, &self.location, register_snapshot, base)?;
             }
             ParameterValue::U64(Some(v)) => {
-                Self::commit_value(*v, &self.location, register_snapshot, base);
+                Self::commit_value(*v, &self.location, register_snapshot, base)?;
             }
             ParameterValue::I8(Some(v)) => {
-                Self::commit_value(*v, &self.location, register_snapshot, base);
+                Self::commit_value(*v, &self.location, register_snapshot, base)?;
             }
             ParameterValue::I16(Some(v)) => {
-                Self::commit_value(*v, &self.location, register_snapshot, base);
+                Self::commit_value(*v, &self.location, register_snapshot, base)?;
             }
             ParameterValue::I32(Some(v)) => {
-                Self::commit_value(*v, &self.location, register_snapshot, base);
+                Self::commit_value(*v, &self.location, register_snapshot, base)?;
             }
             ParameterValue::I64(Some(v)) => {
-                Self::commit_value(*v, &self.location, register_snapshot, base);
+                Self::commit_value(*v, &self.location, register_snapshot, base)?;
             }
             ParameterValue::F32(Some(v)) => {
-                Self::commit_value(v.to_bits(), &self.location, register_snapshot, base);
+                Self::commit_value(v.to_bits(), &self.location, register_snapshot, base)?;
             }
             ParameterValue::F64(Some(v)) => {
-                Self::commit_value(v.to_bits(), &self.location, register_snapshot, base);
+                Self::commit_value(v.to_bits(), &self.location, register_snapshot, base)?;
             }
             ParameterValue::CStr(Some(string)) => {
                 let cstring = CString::new(string.clone()).map_err(|_| Error::InvalidCString)?;
@@ -319,14 +359,14 @@ impl Parameter {
                     parameter.try_commit(register_snapshot, *addy)?;
                 }
 
-                Self::commit_value(*addy, &self.location, register_snapshot, base);
+                Self::commit_value(*addy, &self.location, register_snapshot, base)?;
             }
             ParameterValue::NamedPtr(Some(addy), parameters) => {
                 for parameter in parameters.values() {
                     parameter.try_commit(register_snapshot, *addy)?;
                 }
 
-                Self::commit_value(*addy, &self.location, register_snapshot, base);
+                Self::commit_value(*addy, &self.location, register_snapshot, base)?;
             }
             _ => (),
         }
@@ -338,15 +378,15 @@ impl Parameter {
         location: &ParameterLocation,
         register_snapshot: &R,
         base: u64,
-    ) -> T {
-        match location {
+    ) -> Result<T, Error> {
+        Ok(match location {
             ParameterLocation::Relative(o) => {
                 let memory = MemoryBlock::at(base);
 
-                memory.load(*o)
+                memory.load(*o)?
             }
             ParameterLocation::Reg(reg) => T::from_u128(register_snapshot.acquire_value(reg)),
-        }
+        })
     }
 
     pub fn commit_value<T: Copy + FromU128 + ToU128 + PartialEq, R: RegisterSnapshot>(
@@ -354,21 +394,23 @@ impl Parameter {
         location: &ParameterLocation,
         register_snapshot: &mut R,
         base: u64,
-    ) {
-        if Self::acquire_value::<T, R>(location, register_snapshot, base) == value {
-            return;
+    ) -> Result<(), Error> {
+        if Self::acquire_value::<T, R>(location, register_snapshot, base)? == value {
+            return Ok(());
         }
 
         match location {
             ParameterLocation::Relative(o) => {
                 let memory = MemoryBlock::at(base);
 
-                memory.store(*o, value);
+                memory.store(*o, value)?;
             }
             ParameterLocation::Reg(reg) => {
                 register_snapshot.set_value(reg, value.to_u128());
             }
         }
+
+        Ok(())
     }
 
     pub fn acquire_cstr(location: &ParameterLocation, base: u64) -> Result<&'static CStr, Error> {
@@ -376,7 +418,7 @@ impl Parameter {
             ParameterLocation::Relative(o) => {
                 let memory = MemoryBlock::at(base);
 
-                Ok(memory.load_cstr(*o))
+                Ok(memory.load_cstr(*o)?)
             }
             ParameterLocation::Reg(_) => Err(Error::CannotLoadCStrFromRegister),
         }
@@ -391,7 +433,7 @@ impl Parameter {
             ParameterLocation::Relative(o) => {
                 let memory = MemoryBlock::at(base);
 
-                memory.store_cstr(*o, value);
+                memory.store_cstr(*o, value)?;
             }
             ParameterLocation::Reg(_) => return Err(Error::CannotStoreCStrToRegister),
         }
