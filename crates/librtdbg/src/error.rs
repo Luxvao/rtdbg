@@ -69,6 +69,12 @@ pub enum Error {
     UnexpectedResponse(Response),
     #[error("Operation timed out")]
     Timeout,
+    #[error("Malformed instruction provided")]
+    MalformedInstruction,
+    #[error("Target PC is too far remote for a relocation")]
+    RelocationTooFar,
+    #[error("Tried to relocate an unknown opcode")]
+    UnknownOpcode,
 }
 
 impl<T> From<PoisonError<T>> for Error {

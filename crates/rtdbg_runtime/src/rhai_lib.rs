@@ -6,7 +6,7 @@ use imep::{
 use imp_core::{ImportSlot, Module, ObjectFormat, Parser, rhai_enum_impl::*};
 
 use librtdbg::{
-    arch::amd64::Amd64RegisterSnapshot,
+    arch::amd64::reg::Amd64RegisterSnapshot,
     either::Either,
     hook::{
         self, CallControl, HookId, HookOrder, HookPhase, HookStatus, ImportId, attach_hook,

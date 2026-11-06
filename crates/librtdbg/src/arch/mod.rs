@@ -1,4 +1,5 @@
 pub mod amd64;
+pub mod relocator;
 
 #[derive(Debug, Clone, Copy)]
 pub struct TrampolineGenDesc<const SIZE: usize> {
@@ -9,7 +10,10 @@ pub struct TrampolineGenDesc<const SIZE: usize> {
 }
 
 #[cfg(target_arch = "x86_64")]
-pub type NativeRegisterStruct = amd64::Amd64RegisterSnapshot;
+pub type NativeRelocator = amd64::rel::Amd64Relocator;
+
+#[cfg(target_arch = "x86_64")]
+pub type NativeRegisterStruct = amd64::reg::Amd64RegisterSnapshot;
 
 #[cfg(target_arch = "x86_64")]
 pub const NATIVE_TRAMPOLINE_SIZE: u64 = amd64::TRAMPOLINE_SIZE as u64;
